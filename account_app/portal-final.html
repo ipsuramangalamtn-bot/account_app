@@ -1,0 +1,1657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Account Data Portal</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<script type="module">
+import { initializeApp }       from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import {
+  getFirestore, collection, addDoc, getDocs,
+  query, orderBy, serverTimestamp,
+  doc, setDoc, getDoc, deleteDoc, updateDoc, writeBatch
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+// ─────────────────────────────────────────────
+//  🔥 PASTE YOUR FIREBASE CONFIG HERE
+// ─────────────────────────────────────────────
+const FIREBASE_CONFIG = {
+apiKey: "AIzaSyA1UJDXWIY3QnX1MbfoDw2RCvEK_-XnNMM",
+  authDomain: "account-portal-e3745.firebaseapp.com",
+  projectId: "account-portal-e3745",
+  storageBucket: "account-portal-e3745.firebasestorage.app",
+  messagingSenderId: "320629069305",
+  appId: "1:320629069305:web:51793dbdc8b25c2836d928",
+  measurementId: "G-WSSZYY76QJ"
+};
+// ─────────────────────────────────────────────
+
+let db = null;
+let fbReady = false;
+
+if (FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY") {
+  try {
+    const app = initializeApp(FIREBASE_CONFIG);
+    db = getFirestore(app);
+    fbReady = true;
+  } catch(e) { console.error("Firebase init:", e); }
+}
+
+// ── Offices master ──────────────────────────
+window.fbSaveOffices = async function(offices, accountTypes) {
+  if (!fbReady) return false;
+  try {
+    await setDoc(doc(db, "config", "officeMaster"), {
+      offices: offices,
+      accountTypes: accountTypes,
+      updatedAt: serverTimestamp()
+    });
+    console.log("✅ Saved to Firebase — offices:", offices.length, "accountTypes:", accountTypes.length);
+    return true;
+  } catch(e) { console.error("fbSaveOffices error:", e); return false; }
+};
+
+window.fbLoadOffices = async function() {
+  if (!fbReady) return null;
+  try {
+    const snap = await getDoc(doc(db, "config", "officeMaster"));
+    return snap.exists() ? snap.data() : null;
+  } catch(e) { return null; }
+};
+
+// ── Submissions ─────────────────────────────
+window.fbSaveSubmission = async function(data) {
+  if (!fbReady) return null;
+  try {
+    const ref = await addDoc(collection(db, "submissions"), {
+      ...data, createdAt: serverTimestamp()
+    });
+    return ref.id;
+  } catch(e) { console.error(e); return null; }
+};
+
+window.fbLoadSubmissions = async function() {
+  if (!fbReady) return null;
+  try {
+    const snap = await getDocs(query(collection(db, "submissions"), orderBy("createdAt","desc")));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch(e) { return null; }
+};
+
+// ── Admin config ────────────────────────────
+window.fbDeleteSubmission = async function(id) {
+  if (!fbReady) return false;
+  try { await deleteDoc(doc(db, "submissions", id)); return true; }
+  catch(e) { console.error(e); return false; }
+};
+
+window.fbUpdateSubmission = async function(id, data) {
+  if (!fbReady) return false;
+  try { await updateDoc(doc(db, "submissions", id), { ...data, updatedAt: serverTimestamp() }); return true; }
+  catch(e) { console.error(e); return false; }
+};
+window.fbSaveConfig = async function(key, val) {
+  if (!fbReady) return;
+  try { await setDoc(doc(db, "config", key), { value: val }); } catch(e) {}
+};
+window.fbLoadConfig = async function(key) {
+  if (!fbReady) return null;
+  try { const s = await getDoc(doc(db, "config", key)); return s.exists() ? s.data().value : null; } catch(e) { return null; }
+};
+
+window.isFirebaseReady = () => fbReady;
+
+// Boot: mark connected once module loads
+document.addEventListener("DOMContentLoaded", () => {
+  if (fbReady) {
+    window._fbConnected = true;
+    document.getElementById("setup-banner")?.style.setProperty("display","none");
+    const st = document.getElementById("fb-status");
+    if (st) { st.className = "fb-badge live"; st.innerHTML = '<span class="fb-dot"></span>Live'; }
+  }
+  window.bootPortal?.();
+});
+</script>
+
+<style>
+:root{
+  --ink:#0c1824;--ink2:#162535;--ink3:#1f3348;
+  --muted:#637b98;--muted2:#9ab0c6;
+  --line:#d0e0ee;--line2:#e8f1f9;
+  --bg:#ebf2fa;--sur:#fff;
+  --blue:#1356e4;--blue2:#0840cc;--bsoft:#e2ecff;
+  --green:#0bb868;--gsoft:#e1f9ec;
+  --amber:#f59e0b;--asoft:#fef3c7;
+  --red:#e53935;--rsoft:#fde8e8;
+  --cyan:#0891b2;--csoft:#e0f5f9;
+  --r:14px;--r2:10px;
+  --sh:0 2px 18px rgba(12,24,36,.07);
+  --sh2:0 8px 36px rgba(12,24,36,.13)
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;font-size:15px;line-height:1.55}
+
+/* ── SETUP BANNER ── */
+.setup-banner{
+  background:linear-gradient(90deg,#7c3aed 0%,#1356e4 100%);
+  color:#fff;padding:12px 18px;display:flex;align-items:center;gap:12px;
+  position:sticky;top:0;z-index:500;box-shadow:0 2px 14px rgba(0,0,0,.2)
+}
+.setup-banner .st{flex:1;font-size:.82rem}
+.setup-banner .st strong{display:block;font-size:.9rem;margin-bottom:2px}
+.setup-banner .st span{opacity:.75;font-size:.74rem}
+.setup-banner button{background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.4);color:#fff;padding:6px 13px;border-radius:8px;cursor:pointer;font-family:'Sora',sans-serif;font-size:.77rem;font-weight:600;white-space:nowrap;flex-shrink:0}
+.setup-banner button:hover{background:rgba(255,255,255,.28)}
+
+/* ── TOPNAV ── */
+.topnav{background:var(--ink);color:#fff;padding:0 20px;height:54px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:400;box-shadow:0 2px 20px rgba(0,0,0,.3)}
+.nav-brand{display:flex;align-items:center;gap:9px;font-family:'DM Serif Display',serif;font-size:1.1rem}
+.nav-brand .ico{font-size:1.3rem}
+.nav-tabs{display:flex;gap:2px}
+.ntab{padding:6px 12px;border-radius:7px;cursor:pointer;font-size:.76rem;font-weight:500;color:rgba(255,255,255,.5);border:none;background:transparent;transition:all .2s;white-space:nowrap}
+.ntab:hover{color:#fff;background:rgba(255,255,255,.08)}.ntab.active{color:#fff;background:rgba(19,86,228,.4)}
+.role-pill{padding:4px 12px;border-radius:20px;font-size:.7rem;font-weight:600;background:rgba(255,255,255,.1);color:#fff;cursor:pointer;border:none}
+.role-pill:hover{background:rgba(255,255,255,.2)}
+.fb-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:.67rem;font-weight:600;margin-left:8px}
+.fb-badge.live{background:#d1fae5;color:#065f46}.fb-badge.demo{background:#fef3c7;color:#7a4f00}
+.fb-dot{width:6px;height:6px;border-radius:50%;background:#10b981;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── WIZARD ── */
+.wizard{background:var(--ink2);padding:10px 20px;display:flex;align-items:center}
+.wi{display:flex;align-items:center;gap:6px;flex:1;opacity:.28;transition:opacity .3s}
+.wi.active{opacity:1}.wi.done{opacity:.5}
+.wd{width:21px;height:21px;border-radius:50%;border:1.5px solid rgba(255,255,255,.25);background:rgba(255,255,255,.07);color:#fff;font-size:.62rem;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .3s}
+.wi.active .wd{background:var(--blue);border-color:var(--blue)}.wi.done .wd{background:var(--green);border-color:var(--green)}
+.wl{font-size:.67rem;color:#fff;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wc{flex-shrink:0;width:14px;height:1px;background:rgba(255,255,255,.18);margin:0 3px}
+
+/* ── LAYOUT ── */
+.view{display:none;animation:fup .3s ease both}.view.active{display:block}
+@keyframes fup{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.wrap{max-width:700px;margin:0 auto;padding:22px 16px 90px}
+.wrap.wide{max-width:1080px}
+
+/* ── LOADING SCREEN ── */
+.boot-screen{position:fixed;inset:0;background:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:900;color:#fff;transition:opacity .4s}
+.boot-screen.hide{opacity:0;pointer-events:none}
+.boot-ico{font-size:3rem;animation:bob 1.5s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.boot-title{font-family:'DM Serif Display',serif;font-size:1.6rem}
+.boot-sub{font-size:.82rem;opacity:.55;margin-top:-8px}
+.boot-progress{width:200px;height:3px;background:rgba(255,255,255,.15);border-radius:3px;overflow:hidden;margin-top:8px}
+.boot-bar{height:100%;background:var(--blue);border-radius:3px;animation:loadBar 2s ease-in-out forwards}
+@keyframes loadBar{0%{width:0}60%{width:70%}100%{width:100%}}
+
+/* ── CARDS ── */
+.card{background:var(--sur);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden;margin-bottom:16px}
+.card-hd{padding:19px 22px 14px;background:linear-gradient(135deg,var(--ink) 0%,var(--ink2) 100%);color:#fff}
+.card-hd .sub{font-size:.67rem;opacity:.48;text-transform:uppercase;letter-spacing:.09em;margin-bottom:3px}
+.card-hd h2{font-family:'DM Serif Display',serif;font-size:1.22rem;line-height:1.2}
+.card-hd p{font-size:.77rem;opacity:.58;margin-top:3px}
+.card-body{padding:20px}
+
+/* ── FIELDS ── */
+.field{margin-bottom:13px}
+.field label{display:block;font-size:.71rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:5px}
+.inp{width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:var(--r2);font-family:'Sora',sans-serif;font-size:.88rem;color:var(--ink);background:#fff;outline:none;transition:border .2s}
+.inp:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(19,86,228,.1)}
+.inp-ico{position:relative}.inp-ico .ic{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:.88rem;pointer-events:none}.inp-ico .inp{padding-left:33px}
+
+/* ── OFFICE LIST ── */
+.o-list{display:flex;flex-direction:column;gap:7px;max-height:400px;overflow-y:auto;padding-right:2px}
+.o-list::-webkit-scrollbar{width:4px}.o-list::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+.o-item{display:flex;align-items:flex-start;gap:10px;padding:12px 13px;border:1.5px solid var(--line);border-radius:var(--r2);cursor:pointer;transition:all .18s;background:var(--bg)}
+.o-item:hover,.o-item.sel{border-color:var(--blue);background:var(--bsoft)}
+.o-ico{width:36px;height:36px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.78rem;font-weight:700;color:#fff;margin-top:1px}
+.o-ico.so{background:linear-gradient(135deg,#0891b2,#06b6d4)}.o-ico.hpo{background:linear-gradient(135deg,#7c3aed,#a855f7)}.o-ico.spo{background:linear-gradient(135deg,#1356e4,#4d8aff)}.o-ico.other{background:linear-gradient(135deg,#64748b,#94a3b8)}
+.o-info{flex:1;min-width:0}
+.o-name{font-size:.86rem;font-weight:600;line-height:1.3}
+.o-meta{font-size:.7rem;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.o-sub-count{font-size:.7rem;color:var(--blue);background:var(--bsoft);padding:1px 7px;border-radius:20px;font-weight:600;margin-top:3px;display:inline-block}
+.o-chk{width:19px;height:19px;border-radius:50%;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:.58rem;color:transparent;flex-shrink:0;transition:all .2s;margin-top:2px}
+.o-item.sel .o-chk{background:var(--blue);border-color:var(--blue);color:#fff}
+.no-items{text-align:center;padding:28px;color:var(--muted);font-size:.83rem}
+.type-badge{display:inline-flex;padding:1px 6px;border-radius:20px;font-size:.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.tb-so{background:var(--csoft);color:var(--cyan)}.tb-hpo{background:#ede9fe;color:#7c3aed}.tb-spo{background:var(--bsoft);color:var(--blue)}.tb-other{background:var(--line2);color:var(--muted)}
+
+/* ── DATE ── */
+.date-inp{width:100%;padding:11px 12px 11px 34px;border:1.5px solid var(--line);border-radius:var(--r2);font-family:'Sora',sans-serif;font-size:.9rem;color:var(--ink);background:#fff;outline:none;cursor:pointer;-webkit-appearance:none;transition:border .2s}
+.date-inp:focus{border-color:var(--blue)}
+.today-tag{display:inline-flex;align-items:center;gap:4px;margin-top:6px;padding:3px 10px;border-radius:20px;font-size:.7rem;font-weight:600;background:var(--gsoft);color:var(--green)}
+
+/* ── DATA ENTRY ── */
+.office-section{margin-bottom:4px}
+.sec-hd{display:flex;align-items:center;gap:9px;padding:11px 14px;border-radius:var(--r2);margin-bottom:12px}
+.sec-hd.primary{background:linear-gradient(135deg,#0c1824,#162535);color:#fff}
+.sec-hd.subordinate{background:linear-gradient(135deg,#1356e4,#4d8aff);color:#fff}
+.sh-ic{font-size:1.05rem;flex-shrink:0}.sh-info{flex:1;min-width:0}.sh-ttl{font-size:.84rem;font-weight:600}.sh-sub{font-size:.68rem;opacity:.6;margin-top:1px}
+.sh-tag{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:2px 8px;border-radius:20px;background:rgba(255,255,255,.2);color:#fff;flex-shrink:0}
+.acc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+@media(min-width:460px){.acc-grid{grid-template-columns:repeat(4,1fr)}}
+@media(min-width:600px){.acc-grid{grid-template-columns:repeat(5,1fr)}}
+.a-cell{background:var(--bg);border:1.5px solid var(--line);border-radius:9px;padding:10px 8px;display:flex;flex-direction:column;gap:4px;transition:all .18s}
+.a-cell:focus-within{border-color:var(--blue);box-shadow:0 0 0 3px rgba(19,86,228,.1);background:#fff}
+.a-cell.hv{border-color:#93c5fd;background:var(--bsoft)}
+.a-lbl{font-size:.63rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);display:flex;align-items:center;gap:3px;line-height:1.2}
+.a-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.a-inp{width:100%;border:none;background:transparent;font-family:'DM Serif Display',serif;font-size:1.35rem;color:var(--ink);outline:none;text-align:center;-moz-appearance:textfield}
+.a-inp::-webkit-outer-spin-button,.a-inp::-webkit-inner-spin-button{-webkit-appearance:none}
+.a-inp::placeholder{color:var(--line);font-size:1.1rem}
+.a-step{display:flex;align-items:center;justify-content:center;gap:4px}
+.sb{width:22px;height:22px;border-radius:5px;border:1.5px solid var(--line);background:#fff;cursor:pointer;font-size:.9rem;color:var(--ink2);display:flex;align-items:center;justify-content:center;transition:all .15s}
+.sb:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+.sub-row{display:flex;justify-content:space-between;align-items:center;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:8px 13px;margin-top:9px;font-size:.8rem}
+.sub-row .lbl{color:var(--muted)}.sub-row .val{font-family:'DM Serif Display',serif;font-size:1.05rem}
+.divider{height:1px;background:var(--line2);margin:20px 0}
+.info-box{background:var(--bsoft);border:1px solid #b8d0ff;border-radius:var(--r2);padding:10px 13px;display:flex;gap:8px;font-size:.78rem;color:var(--blue2);margin-top:12px}
+.warn-box{background:var(--asoft);border:1px solid #fcd34d;border-radius:var(--r2);padding:10px 13px;font-size:.78rem;color:#78350f;margin-top:12px}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:11px 20px;border-radius:var(--r2);border:none;cursor:pointer;font-family:'Sora',sans-serif;font-size:.85rem;font-weight:600;transition:all .2s;white-space:nowrap}
+.btn-p{background:var(--blue);color:#fff;box-shadow:0 4px 14px rgba(19,86,228,.25)}.btn-p:hover{background:var(--blue2);transform:translateY(-1px)}
+.btn-p:disabled{background:var(--line);color:var(--muted);box-shadow:none;cursor:not-allowed;transform:none}
+.btn-g{background:#fff;color:var(--muted);border:1.5px solid var(--line)}.btn-g:hover{border-color:var(--muted);color:var(--ink)}
+.btn-grn{background:var(--green);color:#fff;box-shadow:0 4px 14px rgba(11,184,104,.25)}.btn-grn:hover{background:#0aa85e;transform:translateY(-1px)}
+.btn-amb{background:var(--amber);color:#fff}.btn-dk{background:var(--ink);color:#fff}.btn-dk:hover{background:var(--ink2)}
+.btn-sm{padding:6px 13px;font-size:.76rem}.btn-full{width:100%}
+.btn-row{display:flex;gap:8px;margin-top:18px}.btn-row .btn{flex:1}
+
+/* ── FLOAT TOTAL ── */
+.float-total{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 18px;border-radius:30px;font-size:.8rem;font-weight:500;box-shadow:0 4px 22px rgba(0,0,0,.22);display:none;align-items:center;gap:8px;z-index:200;white-space:nowrap}
+.float-total.show{display:flex}.ft-n{font-family:'DM Serif Display',serif;font-size:1.05rem;color:#7dd3fc}
+
+/* ── REVIEW ── */
+.rv-card{background:#fff;border-radius:var(--r);box-shadow:var(--sh);margin-bottom:13px;overflow:hidden}
+.rg{padding:13px 17px;border-bottom:1px solid var(--line2)}.rg:last-child{border-bottom:none}
+.rg-hd{display:flex;align-items:center;gap:6px;margin-bottom:7px}
+.rg-ic{font-size:.9rem}.rg-lbl{font-size:.67rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.rg-val{font-size:.94rem;font-weight:600}.rg-sub{font-size:.75rem;color:var(--muted);margin-top:1px}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.chip{display:flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;background:var(--bg);border:1px solid var(--line);font-size:.71rem}
+.cd{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+
+/* ── SUCCESS ── */
+.suc-wrap{text-align:center;padding:32px 20px}
+.suc-ico{width:66px;height:66px;border-radius:50%;background:var(--gsoft);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:1.9rem;animation:popIn .4s cubic-bezier(.34,1.56,.64,1) .15s both}
+@keyframes popIn{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+.suc-title{font-family:'DM Serif Display',serif;font-size:1.5rem;margin-bottom:5px}
+.suc-sub{font-size:.83rem;color:var(--muted);margin-bottom:20px}
+.meta-tbl{background:var(--bg);border-radius:var(--r2);padding:13px;text-align:left;margin-bottom:20px}
+.m-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--line);font-size:.82rem}.m-row:last-child{border-bottom:none}
+.mk{color:var(--muted)}.mv{font-weight:600}
+
+/* ── ADMIN LOGIN ── */
+.al-wrap{max-width:400px;margin:44px auto;padding:0 16px}
+.al-card{background:#fff;border-radius:var(--r);box-shadow:var(--sh2);overflow:hidden}
+.al-hd{background:linear-gradient(135deg,#0c1824,#1f3348);padding:26px 26px 20px;text-align:center;color:#fff}
+.al-hd h2{font-family:'DM Serif Display',serif;font-size:1.35rem}
+
+/* ── STATS ── */
+.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:11px;margin-bottom:18px}
+@media(min-width:580px){.stat-grid{grid-template-columns:repeat(4,1fr)}}
+.stat-box{background:#fff;border-radius:var(--r2);border:1px solid var(--line);padding:14px;position:relative;overflow:hidden}
+.stat-box::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.stat-box.b::before{background:var(--blue)}.stat-box.g::before{background:var(--green)}.stat-box.a::before{background:var(--amber)}.stat-box.c::before{background:var(--cyan)}
+.stat-ic{font-size:1.4rem;margin-bottom:7px}.stat-v{font-family:'DM Serif Display',serif;font-size:1.7rem;line-height:1}.stat-l{font-size:.7rem;color:var(--muted);margin-top:2px;font-weight:500}
+
+/* ── TABLE ── */
+.tbl-wrap{overflow-x:auto;border-radius:var(--r2);border:1px solid var(--line)}
+table{width:100%;border-collapse:collapse;font-size:.79rem}
+thead th{background:var(--ink);color:#fff;padding:10px 12px;text-align:left;font-size:.69rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+tbody td{padding:10px 12px;border-bottom:1px solid var(--line2);white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}tbody tr:hover td{background:var(--bg)}
+.pill{padding:2px 8px;border-radius:20px;font-size:.67rem;font-weight:600;display:inline-block}
+.g-pill{background:var(--gsoft);color:#057a3f}.a-pill{background:var(--asoft);color:#7a4f00}.b-pill{background:var(--bsoft);color:var(--blue)}
+.c-pill{background:var(--csoft);color:var(--cyan)}.p-pill{background:#ede9fe;color:#7c3aed}
+
+/* ── BAR CHART ── */
+.bc{display:flex;flex-direction:column;gap:8px}
+.b-row{display:flex;align-items:center;gap:8px}.b-lbl{font-size:.71rem;color:var(--muted);width:100px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis}
+.b-trk{flex:1;height:18px;background:var(--line2);border-radius:4px;overflow:hidden}
+.b-fill{height:100%;border-radius:4px;display:flex;align-items:center;padding-left:6px;font-size:.65rem;font-weight:600;color:#fff;min-width:22px}
+.b-num{font-size:.71rem;font-weight:600;width:38px;text-align:right}
+
+/* ── UPLOAD ── */
+.up-area{border:2px dashed var(--line);border-radius:var(--r);padding:28px;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg);margin-bottom:13px}
+.up-area:hover,.up-area.drag{border-color:var(--blue);background:var(--bsoft)}
+.up-ic{font-size:2.2rem;margin-bottom:8px}.up-area h3{font-size:.9rem;font-weight:600;margin-bottom:3px}.up-area p{font-size:.75rem;color:var(--muted)}
+.up-ok{background:var(--gsoft);border:1.5px solid #6ee7b7;border-radius:var(--r2);padding:11px 14px;display:flex;align-items:center;gap:9px;font-size:.83rem;color:#065f46;margin-bottom:13px}
+
+/* ── SMS ── */
+.sms-cfg{background:var(--bg);border:1px solid var(--line);border-radius:var(--r2);padding:14px;margin-bottom:13px}
+.sms-cfg h4{font-size:.73rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:10px}
+.sms-prev{background:var(--ink);color:#fff;border-radius:var(--r2);padding:12px 14px;font-size:.79rem;line-height:1.6;font-family:monospace;margin-top:8px;white-space:pre-wrap}
+.tgl-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line2)}.tgl-row:last-child{border-bottom:none}
+.tl{font-size:.82rem}.ts{font-size:.72rem;color:var(--muted);margin-top:1px}
+.tgl{width:37px;height:20px;border-radius:10px;background:var(--line);border:none;cursor:pointer;position:relative;transition:background .25s;flex-shrink:0}
+.tgl.on{background:var(--green)}.tgl::after{content:'';position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:3px;left:3px;transition:left .25s}.tgl.on::after{left:20px}
+.prog-bar{height:5px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:4px}.prog-fill{height:100%;border-radius:3px}
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:15px}.sec-hdr h2{font-family:'DM Serif Display',serif;font-size:1.2rem}
+
+/* ── SETUP MODAL ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:600;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+.modal-overlay.hidden{display:none}
+.modal{background:#fff;border-radius:var(--r);box-shadow:var(--sh2);max-width:640px;width:100%;margin:auto}
+.modal-hd{background:linear-gradient(135deg,#7c3aed,#1356e4);color:#fff;padding:20px 22px 16px;display:flex;align-items:flex-start;justify-content:space-between}
+.modal-hd h2{font-family:'DM Serif Display',serif;font-size:1.25rem}.modal-hd p{font-size:.77rem;opacity:.7;margin-top:3px}
+.mc{background:rgba(255,255,255,.2);border:none;color:#fff;width:28px;height:28px;border-radius:50%;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.mc:hover{background:rgba(255,255,255,.35)}.modal-body{padding:20px}
+.step-block{display:flex;gap:13px;margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid var(--line2)}.step-block:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+.sn{width:28px;height:28px;border-radius:50%;background:var(--blue);color:#fff;font-size:.78rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
+.sc h3{font-size:.9rem;font-weight:600;margin-bottom:5px}.sc p,.sc li{font-size:.81rem;color:var(--ink2);line-height:1.65}.sc ul{padding-left:15px;margin-top:4px}
+.sc code{background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:1px 6px;font-size:.76rem;font-family:monospace;color:var(--ink)}
+.code-block{background:var(--ink);color:#a5f3fc;border-radius:var(--r2);padding:11px 13px;font-family:monospace;font-size:.74rem;line-height:1.7;margin-top:8px;overflow-x:auto;white-space:pre}
+.sc a{color:var(--blue);font-weight:600}
+
+/* ── SPINNER / TOAST ── */
+.spinner{display:inline-block;width:17px;height:17px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+.lov{position:fixed;inset:0;background:rgba(12,24,36,.6);z-index:700;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:11px;color:#fff;font-size:.88rem}
+.lov.hidden{display:none}
+.big-spin{width:38px;height:38px;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
+.toast{position:fixed;bottom:20px;right:16px;z-index:800;background:var(--ink);color:#fff;padding:11px 15px;border-radius:var(--r2);font-size:.82rem;font-weight:500;box-shadow:0 4px 20px rgba(0,0,0,.22);transform:translateY(60px);opacity:0;transition:all .3s;max-width:300px;line-height:1.4}
+.toast.show{transform:translateY(0);opacity:1}.toast.ok{background:var(--green)}.toast.err{background:var(--red)}.toast.warn{background:var(--amber);color:var(--ink)}
+
+@media(max-width:520px){
+  .topnav{padding:0 11px}.ntab{padding:5px 7px;font-size:.7rem}
+  .nav-brand span:last-child{display:none}.wrap{padding:14px 10px 90px}
+  .acc-grid{grid-template-columns:repeat(2,1fr)}.stat-grid{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+
+<!-- BOOT SCREEN -->
+<div class="boot-screen" id="boot-screen">
+  <div class="boot-ico">📮</div>
+  <div class="boot-title">Account Data Portal</div>
+  <div class="boot-sub">Loading offices from database…</div>
+  <div class="boot-progress"><div class="boot-bar"></div></div>
+</div>
+
+<!-- SETUP BANNER -->
+<div class="setup-banner" id="setup-banner">
+  <span style="font-size:1.25rem;flex-shrink:0">🔥</span>
+  <div class="st">
+    <strong>Firebase not configured — running in Demo Mode</strong>
+    <span>Open portal.html in a text editor and paste your Firebase config. Follow the setup guide.</span>
+  </div>
+  <button onclick="showModal()">📖 Setup Guide</button>
+</div>
+
+<!-- TOPNAV -->
+<nav class="topnav">
+  <div class="nav-brand">
+    <span class="ico">📮</span>
+    <span>Account Portal</span>
+    <span class="fb-badge demo" id="fb-status">
+      <span class="fb-dot" style="background:#f59e0b;animation:none"></span>Demo
+    </span>
+  </div>
+  <div class="nav-tabs">
+    <button class="ntab active" onclick="switchView('submit',this)">📝 Submit</button>
+    <button class="ntab" onclick="requireAdmin('dashboard',this)">📊 Dashboard</button>
+    <button class="ntab" onclick="requireAdmin('reports',this)">📋 Reports</button>
+    <button class="ntab" onclick="requireAdmin('admin',this)">⚙️ Admin</button>
+  </div>
+  <button class="role-pill" id="role-btn" onclick="handleRoleClick()">👤 Staff</button>
+</nav>
+
+<!-- WIZARD -->
+<div class="wizard" id="wizard">
+  <div class="wi active" id="wi1"><div class="wd" id="wd1">1</div><div class="wl">Select Office</div></div>
+  <div class="wc"></div>
+  <div class="wi" id="wi2"><div class="wd" id="wd2">2</div><div class="wl">Pick Date</div></div>
+  <div class="wc"></div>
+  <div class="wi" id="wi3"><div class="wd" id="wd3">3</div><div class="wl">Enter Counts</div></div>
+  <div class="wc"></div>
+  <div class="wi" id="wi4"><div class="wd" id="wd4">4</div><div class="wl">Review &amp; Submit</div></div>
+</div>
+
+<!-- ═══ SUBMIT VIEW ═══ -->
+<div class="view active" id="view-submit">
+
+  <div class="wrap" id="sp1">
+    <div class="card">
+      <div class="card-hd"><div class="sub">Step 1 of 4</div><h2>Select Your Office</h2><p>Showing HPO and SPO offices only</p></div>
+      <div class="card-body">
+        <div class="field inp-ico">
+          <label>Search by name, SOL ID or type</label>
+          <span class="ic">🔍</span>
+          <input class="inp" id="office-search" type="text" placeholder="e.g. Danishpet, 501002…" oninput="filterOffices(this.value)">
+        </div>
+        <div class="o-list" id="office-list"></div>
+        <div class="info-box" id="sample-notice" style="margin-top:12px">
+          <span>ℹ️</span><span>Using sample data. Admin: upload your Excel in ⚙️ Admin — it will be saved to Firebase and loaded here automatically for all users.</span>
+        </div>
+        <div class="btn-row"><button class="btn btn-p btn-full" id="btn-s1" onclick="goS2()" disabled>Continue →</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap" id="sp2" style="display:none">
+    <div class="card">
+      <div class="card-hd"><div class="sub">Step 2 of 4</div><h2>Select Reporting Date</h2><p>Date for which you are submitting account data</p></div>
+      <div class="card-body">
+        <div class="field inp-ico">
+          <label>Reporting Date</label>
+          <span class="ic" style="left:11px">📅</span>
+          <input class="date-inp" type="date" id="report-date" onchange="onDateChange()">
+        </div>
+        <div class="today-tag" id="today-tag">✅ Set to today</div>
+        <div class="info-box" style="margin-top:12px"><span>ℹ️</span><span>Data saved permanently to Firebase against this date.</span></div>
+        <div class="btn-row">
+          <button class="btn btn-g" onclick="backToS(1)">← Back</button>
+          <button class="btn btn-p" onclick="goS3()">Continue →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap" id="sp3" style="display:none">
+    <div class="card">
+      <div class="card-hd"><div class="sub">Step 3 of 4</div><h2>Enter Account Counts</h2><p id="s3-desc">Fill in accounts opened</p></div>
+      <div class="card-body" id="data-entry-body"></div>
+    </div>
+    <div class="float-total" id="float-total">
+      <span>Grand Total</span><span class="ft-n" id="ft-num">0</span><span>accounts</span>
+    </div>
+  </div>
+
+  <div class="wrap" id="sp4" style="display:none">
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-hd"><div class="sub">Step 4 of 4</div><h2>Review &amp; Submit</h2><p>Verify before final submission</p></div>
+    </div>
+    <div id="review-body"></div>
+    <button class="btn btn-grn btn-full" onclick="doSubmit()" id="submit-btn">✅ Submit Report</button>
+    <button class="btn btn-g btn-full" onclick="backToS(3)" style="margin-top:8px">← Back &amp; Edit</button>
+  </div>
+
+  <div class="wrap" id="sp5" style="display:none">
+    <div class="card">
+      <div class="suc-wrap">
+        <div class="suc-ico">✅</div>
+        <div class="suc-title">Report Submitted!</div>
+        <div class="suc-sub" id="s-sub"></div>
+        <div class="meta-tbl" id="s-meta"></div>
+        <button class="btn btn-dk btn-full" onclick="resetAll()">🔄 Submit Another Report</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ADMIN LOGIN ═══ -->
+<div class="view" id="view-admin-login">
+  <div class="al-wrap">
+    <div class="al-card">
+      <div class="al-hd"><div style="font-size:2rem;margin-bottom:9px">🔐</div><h2>Admin Access</h2><p style="font-size:.78rem;opacity:.55;margin-top:3px">Enter credentials to continue</p></div>
+      <div class="card-body">
+        <div class="field"><label>Username</label><input class="inp" id="admin-user" type="text" placeholder="admin" autocomplete="off"></div>
+        <div class="field"><label>Password</label><input class="inp" id="admin-pass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+        <button class="btn btn-p btn-full" onclick="doLogin()" style="margin-top:4px">Login →</button>
+        <p style="font-size:.7rem;color:var(--muted);text-align:center;margin-top:11px">Default: <code>admin</code> / <code>admin123</code></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ DASHBOARD ═══ -->
+<div class="view" id="view-dashboard">
+  <div class="wrap wide">
+    <div class="sec-hdr">
+      <h2>📊 Dashboard</h2>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-g btn-sm" onclick="loadDash()">🔄 Refresh</button>
+        <span class="pill b-pill" id="dash-date"></span>
+      </div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-box b"><div class="stat-ic">🏦</div><div class="stat-v" id="st-total">—</div><div class="stat-l">Total Accounts</div></div>
+      <div class="stat-box g"><div class="stat-ic">✅</div><div class="stat-v" id="st-sub">—</div><div class="stat-l">Offices Submitted</div></div>
+      <div class="stat-box a"><div class="stat-ic">⏳</div><div class="stat-v" id="st-pend">—</div><div class="stat-l">Pending</div></div>
+      <div class="stat-box c"><div class="stat-ic">📅</div><div class="stat-v" id="st-today">—</div><div class="stat-l">Today's Reports</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
+      <div class="card" style="margin:0"><div class="card-body"><div style="font-size:.82rem;font-weight:600;margin-bottom:12px">📊 By Account Type</div><div class="bc" id="type-chart"></div></div></div>
+      <div class="card" style="margin:0"><div class="card-body"><div style="font-size:.82rem;font-weight:600;margin-bottom:12px">🏢 Submission Status</div><div id="status-chart"></div></div></div>
+    </div>
+    <div class="card"><div class="card-body">
+      <div style="font-size:.82rem;font-weight:600;margin-bottom:12px">📋 Recent Submissions</div>
+      <div class="tbl-wrap"><table><thead><tr><th>Office</th><th>Type</th><th>SOL ID</th><th>SO Name</th><th>Date</th><th>Total</th><th>Ref</th><th></th></tr></thead><tbody id="dash-tbody"></tbody></table></div>
+    </div></div>
+  </div>
+</div>
+
+<!-- ═══ REPORTS ═══ -->
+<div class="view" id="view-reports">
+  <div class="wrap wide">
+    <div class="sec-hdr">
+      <h2>📋 Submissions</h2>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-g btn-sm" onclick="loadReports()">🔄 Refresh</button>
+        <button class="btn btn-p btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
+      </div>
+    </div>
+    <div class="card"><div class="card-body">
+      <div style="display:flex;gap:8px;margin-bottom:13px;flex-wrap:wrap">
+        <input class="inp" id="rpt-q" style="flex:1;min-width:130px" placeholder="Search office, SOL ID…" oninput="filterRpt()">
+        <select class="inp" id="rpt-type" style="width:110px" onchange="filterRpt()"><option value="">All Types</option></select>
+        <select class="inp" id="rpt-status" style="width:120px" onchange="filterRpt()"><option value="">All Status</option><option>Submitted</option><option>Pending</option></select>
+      </div>
+      <div class="tbl-wrap"><table>
+        <thead id="rpt-thead"></thead>
+        <tbody id="rpt-tbody"></tbody>
+      </table></div>
+    </div></div>
+  </div>
+</div>
+
+<!-- ═══ EDIT SUBMISSION MODAL ═══ -->
+<div class="modal-overlay hidden" id="edit-modal">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-hd" style="background:linear-gradient(135deg,#0c1824,#1f3348)">
+      <div><h2>✏️ Edit Submission</h2><p id="edit-modal-sub">Modify account counts for this submission</p></div>
+      <button class="mc" onclick="closeEditModal()">✕</button>
+    </div>
+    <div class="modal-body" style="max-height:75vh;overflow-y:auto">
+      <div id="edit-modal-body"></div>
+      <div style="display:flex;gap:9px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line2)">
+        <button class="btn btn-grn" style="flex:1" onclick="saveEdit()">💾 Save Changes</button>
+        <button class="btn btn-g" onclick="closeEditModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ DELETE CONFIRM MODAL ═══ -->
+<div class="modal-overlay hidden" id="del-modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-hd" style="background:linear-gradient(135deg,#7f1d1d,#e53935)">
+      <div><h2>🗑️ Delete Submission</h2><p>This action cannot be undone</p></div>
+      <button class="mc" onclick="closeDelModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="del-modal-body" style="font-size:.88rem;color:var(--ink2);margin-bottom:18px;line-height:1.65"></div>
+      <div style="display:flex;gap:9px">
+        <button class="btn" style="flex:1;background:var(--red);color:#fff" onclick="confirmDelete()">🗑️ Yes, Delete</button>
+        <button class="btn btn-g" style="flex:1" onclick="closeDelModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ADMIN ═══ -->
+<div class="view" id="view-admin">
+  <div class="wrap wide">
+    <div class="sec-hdr"><h2>⚙️ Admin Panel</h2><button class="btn btn-g btn-sm" onclick="doLogout()">🚪 Logout</button></div>
+
+    <!-- Firebase status -->
+    <div class="card">
+      <div class="card-hd"><div class="sub">Firebase</div><h2>🔥 Database Connection</h2></div>
+      <div class="card-body">
+        <div id="fb-ok-msg" style="display:none" class="up-ok">🔥 Firebase connected. Office master and all submissions are stored permanently in Firestore.</div>
+        <div id="fb-no-msg">
+          <div class="warn-box" style="display:flex;align-items:center;gap:9px">
+            ⚠️ Not connected. Open <code>portal.html</code> in a text editor and paste your Firebase config at the top.
+            <button class="btn btn-sm btn-amb" onclick="showModal()" style="margin-left:auto;flex-shrink:0">📖 How?</button>
+          </div>
+        </div>
+        <button class="btn btn-p btn-sm" style="margin-top:12px" onclick="showModal()">📖 Firebase Setup Guide</button>
+      </div>
+    </div>
+
+    <!-- Upload Office Master -->
+    <div class="card">
+      <div class="card-hd"><div class="sub">Office Master</div><h2>Upload Office Master Excel</h2>
+        <p>Upload once → saved to Firebase → all users load automatically on page open</p>
+      </div>
+      <div class="card-body">
+        <div id="up-ok-banner" style="display:none" class="up-ok"><span>✅</span><span id="up-ok-txt">Uploaded!</span></div>
+        <div class="up-area" id="drop-zone"
+          onclick="document.getElementById('xl-file').click()"
+          ondragover="event.preventDefault();this.classList.add('drag')"
+          ondragleave="this.classList.remove('drag')"
+          ondrop="handleDrop(event)">
+          <div class="up-ic">📊</div>
+          <h3>Click or Drag &amp; Drop Office Master Excel</h3>
+          <p>Accepted: .xlsx — Columns: S.No · Office Name · SO Name · Office ID · Account Office ID · SOL ID · Office Type · Contact Person · Phone Number</p>
+        </div>
+        <input type="file" id="xl-file" accept=".xlsx,.xls" style="display:none" onchange="handleUpload(event)">
+        <div class="info-box" style="margin-top:0">
+          <span>ℹ️</span>
+          <div>
+            <strong>Hierarchy logic:</strong> Column B = Office Name (e.g. "Danishpet S.O"). Column C = SO Name (parent). When "Danishpet S.O" opens the portal to submit, it sees its own row <em>plus</em> all offices that have "Danishpet S.O" in Column C.<br>
+            <strong>All office types</strong> (SO, HPO, SPO, etc.) are shown in the selection list.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Loaded offices preview -->
+    <div class="card" id="office-card" style="display:none">
+      <div class="card-hd"><h2>📋 Loaded Offices</h2><p id="loaded-info">—</p></div>
+      <div class="card-body">
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>S.No</th><th>Office Name (Col B)</th><th>SO Name (Col C)</th><th>Office ID</th><th>Acct Office ID</th><th>SOL ID</th><th>Type</th><th>Subordinates</th><th>Contact</th><th>Phone</th></tr></thead>
+          <tbody id="office-preview"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- Account types preview -->
+    <div class="card" id="at-card" style="display:none">
+      <div class="card-hd"><h2>🏦 Loaded Account Types</h2><p id="at-info">These are the fields shown in the data entry form</p></div>
+      <div class="card-body">
+        <div style="display:flex;flex-wrap:wrap;gap:9px" id="at-preview"></div>
+        <div class="info-box" style="margin-top:14px">
+          <span>ℹ️</span><span>To change these names, edit the <strong>Account Types</strong> sheet in your Excel file and re-upload.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SMS -->
+    <div class="card">
+      <div class="card-hd"><div class="sub">Notifications</div><h2>📱 SMS Reminders</h2><p>Send reminders to pending offices</p></div>
+      <div class="card-body">
+        <div class="sms-cfg">
+          <h4>SMS Gateway</h4>
+          <div class="field"><label>API URL</label><input class="inp" id="sms-api" value="https://api.textlocal.in/send/"></div>
+          <div class="field"><label>API Key</label><input class="inp" id="sms-key" type="password" placeholder="Your API key"></div>
+          <div class="field"><label>Sender ID</label><input class="inp" id="sms-sender" value="ACCTPL"></div>
+        </div>
+        <div class="sms-cfg">
+          <h4>Message Template</h4>
+          <div class="field">
+            <label>Message — use {name} {office} {solid} {date} {link}</label>
+            <textarea class="inp" id="sms-tmpl" rows="3" style="resize:vertical" oninput="updatePrev()">Dear {name}, please submit the account opening report for {office} (SOL: {solid}) for {date} at {link}. Thank you.</textarea>
+          </div>
+          <div style="font-size:.74rem;color:var(--muted);margin-bottom:5px">Preview:</div>
+          <div class="sms-prev" id="sms-prev"></div>
+        </div>
+        <div class="sms-cfg">
+          <h4>Schedule</h4>
+          <div class="tgl-row"><div><div class="tl">Remind at 12:00 PM if not submitted</div><div class="ts">Noon reminder to pending offices</div></div><button class="tgl on" onclick="this.classList.toggle('on')"></button></div>
+          <div class="tgl-row"><div><div class="tl">Final reminder at 4:00 PM</div><div class="ts">Last reminder before EOD</div></div><button class="tgl" onclick="this.classList.toggle('on')"></button></div>
+          <div class="tgl-row"><div><div class="tl">Confirmation SMS after submit</div><div class="ts">Auto SMS on successful submission</div></div><button class="tgl on" onclick="this.classList.toggle('on')"></button></div>
+        </div>
+        <div style="font-size:.83rem;font-weight:600;margin-bottom:10px">Pending Offices</div>
+        <div class="tbl-wrap" style="margin-bottom:14px"><table>
+          <thead><tr><th>Office Name</th><th>Type</th><th>SOL ID</th><th>Contact Person</th><th>Phone</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody id="sms-tbody"></tbody>
+        </table></div>
+        <button class="btn btn-amb" onclick="sendAllSMS()">📱 Send to All Pending</button>
+      </div>
+    </div>
+
+    <!-- Credentials -->
+    <div class="card">
+      <div class="card-hd"><div class="sub">Security</div><h2>Admin Credentials</h2></div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">
+          <div class="field"><label>New Username</label><input class="inp" id="new-user" placeholder="admin"></div>
+          <div class="field"><label>New Password</label><input class="inp" id="new-pass" type="password" placeholder="••••••••"></div>
+        </div>
+        <button class="btn btn-p btn-sm" onclick="saveCreds()">💾 Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SETUP MODAL -->
+<div class="modal-overlay hidden" id="setup-modal">
+  <div class="modal">
+    <div class="modal-hd">
+      <div><h2>🔥 Firebase Setup Guide</h2><p>5 minutes · Free · No server needed</p></div>
+      <button class="mc" onclick="hideModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="step-block"><div class="sn">1</div><div class="sc"><h3>Create a Firebase Project</h3><p>Go to <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a> → Add project → name it (e.g. <code>account-portal</code>) → Create project.</p></div></div>
+      <div class="step-block"><div class="sn">2</div><div class="sc"><h3>Enable Firestore Database</h3><p>Left sidebar → <strong>Firestore Database → Create database → Start in test mode → Choose region → Enable</strong>.</p></div></div>
+      <div class="step-block"><div class="sn">3</div><div class="sc"><h3>Get Your Web App Config</h3><p>Project Settings (⚙️) → Your apps → &lt;/&gt; Web icon → Register. Copy the config object that looks like:</p><div class="code-block">const firebaseConfig = {
+  apiKey: "AIzaSyXXXXXXX",
+  authDomain: "account-portal.firebaseapp.com",
+  projectId: "account-portal",
+  storageBucket: "account-portal.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123:web:xxxxxxxx"
+};</div></div></div>
+      <div class="step-block"><div class="sn">4</div><div class="sc"><h3>Paste into portal.html</h3><p>Open <code>portal.html</code> in Notepad / VS Code. Find <code>const FIREBASE_CONFIG = {</code> near the top. Replace all placeholder values with your actual values. Save and reload.</p><div style="background:var(--gsoft);border:1px solid #6ee7b7;border-radius:var(--r2);padding:10px 13px;font-size:.78rem;color:#065f46;margin-top:8px">✅ The yellow banner disappears and status shows 🟢 Live. Now upload your Office Master Excel in Admin — it saves to Firebase and all users get it instantly on page load!</div></div></div>
+      <div class="step-block"><div class="sn">5</div><div class="sc"><h3>Share with Your Team</h3><p>Drag <code>portal.html</code> to <a href="https://netlify.com/drop" target="_blank">netlify.com/drop</a> for a free public URL everyone can access on mobile or desktop.</p></div></div>
+      <div style="text-align:center;padding-top:8px"><button class="btn btn-p" onclick="hideModal()">Got it ✓</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div class="lov hidden" id="lov"><div class="big-spin"></div><span id="lov-msg">Loading…</span></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════
+let ALL_OFFICES   = [];  // every row from excel
+let ACCOUNT_TYPES = [
+  {id:'SB',  label:'Savings',        color:'#3b82f6'},
+  {id:'CA',  label:'Current',        color:'#8b5cf6'},
+  {id:'FD',  label:'Fixed Deposit',  color:'#f59e0b'},
+  {id:'RD',  label:'Recurring Dep.', color:'#10b981'},
+  {id:'SAL', label:'Salary A/C',     color:'#0ea5e9'},
+  {id:'NRI', label:'NRI A/C',        color:'#ef4444'},
+  {id:'JT',  label:'Joint A/C',      color:'#ec4899'},
+  {id:'PPF', label:'PPF A/C',        color:'#6366f1'},
+  {id:'LOAN',label:'Loan A/C',       color:'#14b8a6'},
+];
+
+let selOffice     = null;
+let reportDate    = '';
+let entryData     = {};
+let localSubs     = [];
+let allReports    = [];
+let adminLoggedIn = false;
+let adminCreds    = {user:'admin', pass:'admin123'};
+let pendingView   = null;
+
+// ── Sample (mirrors exact column structure) ──
+const SAMPLE_OFFICES = [
+  {sno:1,  name:'Salem HO',                soName:'Salem Division',   officeId:'HO001',  acctOfficeId:'',      solId:'500001', type:'HO',  person:'Ravi Kumar',    phone:'9876543210'},
+  {sno:2,  name:'Danishpet S.O',           soName:'Salem HO',         officeId:'SO101',  acctOfficeId:'HO001', solId:'500101', type:'SO',  person:'Suresh Babu',   phone:'9876543211'},
+  {sno:3,  name:'Danishpet West B.O',      soName:'Danishpet S.O',    officeId:'BO101A', acctOfficeId:'SO101', solId:'500102', type:'BO',  person:'Arjun Raj',     phone:'9876543213'},
+  {sno:4,  name:'Danishpet East B.O',      soName:'Danishpet S.O',    officeId:'BO101B', acctOfficeId:'SO101', solId:'500103', type:'BO',  person:'Siva P',        phone:'9876543217'},
+  {sno:5,  name:'Omalur S.O',              soName:'Salem HO',         officeId:'SO201',  acctOfficeId:'HO001', solId:'500201', type:'SO',  person:'Anbu K',        phone:'9876543218'},
+  {sno:6,  name:'Omalur Market B.O',       soName:'Omalur S.O',       officeId:'BO201A', acctOfficeId:'SO201', solId:'500202', type:'BO',  person:'Deepa M',       phone:'9876543216'},
+  {sno:7,  name:'Mettur HPO',              soName:'Salem HO',         officeId:'HPO301', acctOfficeId:'HO001', solId:'500301', type:'HPO', person:'Meena Devi',    phone:'9876543212'},
+  {sno:8,  name:'Mettur Dam S.O',          soName:'Mettur HPO',       officeId:'SO301',  acctOfficeId:'HPO301',solId:'500302', type:'SO',  person:'Priya S',       phone:'9876543214'},
+  {sno:9,  name:'Mettur Dam North B.O',    soName:'Mettur Dam S.O',   officeId:'BO301A', acctOfficeId:'SO301', solId:'500303', type:'BO',  person:'Karthik V',     phone:'9876543215'},
+  {sno:10, name:'Mettur Dam South B.O',    soName:'Mettur Dam S.O',   officeId:'BO301B', acctOfficeId:'SO301', solId:'500304', type:'BO',  person:'Mohan D',       phone:'9876543220'},
+  {sno:11, name:'Edappadi S.O',            soName:'Salem HO',         officeId:'SO401',  acctOfficeId:'HO001', solId:'500401', type:'SO',  person:'Nisha T',       phone:'9876543221'},
+  {sno:12, name:'Edappadi East B.O',       soName:'Edappadi S.O',     officeId:'BO401A', acctOfficeId:'SO401', solId:'500402', type:'BO',  person:'Bala S',        phone:'9876543222'},
+];
+
+// ════════════════════════════════════════
+//  BOOT — called after Firebase module loads
+// ════════════════════════════════════════
+window.bootPortal = async function() {
+  showLoad('Loading offices from database…');
+  try {
+    if (window.isFirebaseReady && window.isFirebaseReady()) {
+      // Try loading from Firebase first
+      const cfg = await window.fbLoadOffices();
+      if (cfg && cfg.offices && cfg.offices.length) {
+        ALL_OFFICES = cfg.offices;
+        // Always replace account types if saved ones exist and are a valid array
+        if (cfg.accountTypes && Array.isArray(cfg.accountTypes) && cfg.accountTypes.length > 0) {
+          ACCOUNT_TYPES = cfg.accountTypes;
+          console.log("✅ Loaded account types from Firebase:", ACCOUNT_TYPES.map(t=>t.label));
+        }
+        document.getElementById('sample-notice').style.display = 'none';
+        toast('Office data loaded from database ✅', 'ok');
+      } else {
+        ALL_OFFICES = [...SAMPLE_OFFICES];
+        // No offices in DB yet — show admin notice
+      }
+    } else {
+      ALL_OFFICES = [...SAMPLE_OFFICES];
+    }
+  } catch(e) {
+    ALL_OFFICES = [...SAMPLE_OFFICES];
+  }
+
+  setToday();
+  filterOffices('');   // renders only HPO + SPO
+  updatePrev();
+  populateTypeFilter();
+  // Seed some demo subs
+  localSubs = [makeDemoSub(ALL_OFFICES[1]), makeDemoSub(ALL_OFFICES[4])];
+
+  hideLoad();
+  setTimeout(() => {
+    document.getElementById('boot-screen').classList.add('hide');
+    setTimeout(() => document.getElementById('boot-screen').style.display = 'none', 400);
+  }, 1800);
+};
+
+// If Firebase not configured, boot immediately from sample
+if (!(window.isFirebaseReady && window.isFirebaseReady())) {
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => window.bootPortal?.(), 400);
+  });
+}
+
+function makeDemoSub(o) {
+  const d = {};
+  const subs = getSubordinates(o.name);
+  [o, ...subs].forEach(x => {
+    d[x.officeId] = {};
+    ACCOUNT_TYPES.forEach(t => { d[x.officeId][t.id] = Math.floor(Math.random()*40)+3; });
+  });
+  const total = Object.values(d).reduce((a,od)=>a+Object.values(od).reduce((b,v)=>b+v,0),0);
+  return { officeId:o.officeId, officeName:o.name, officeType:o.type, solId:o.solId, soName:o.soName, date:getTodayStr(), data:d, total, ref:'REF'+Math.random().toString().slice(2,10), ts:Date.now() };
+}
+
+// ════════════════════════════════════════
+//  HIERARCHY: Col C (soName) = parent name matching Col B (name)
+//  "Danishpet S.O" in Col B → subordinates = rows where soName === "Danishpet S.O"
+// ════════════════════════════════════════
+function getSubordinates(officeName) {
+  return ALL_OFFICES.filter(o => o.soName === officeName && o.name !== officeName);
+}
+function getTypeIcon(t) {
+  const m = {HO:'🏛️',HPO:'🏣',SPO:'📮',SO:'📬',BO:'📭'};
+  return m[t] || '🏢';
+}
+function typeCls(t) {
+  if (t==='SO'||t==='S.O') return 'so';
+  if (t==='HPO') return 'hpo';
+  if (t==='SPO') return 'spo';
+  return 'other';
+}
+function typePillCls(t) {
+  if (t==='SO'||t==='S.O') return 'c-pill';
+  if (t==='HPO') return 'p-pill';
+  if (t==='SPO') return 'b-pill';
+  return 'a-pill';
+}
+
+// ════════════════════════════════════════
+//  OFFICE LIST
+// ════════════════════════════════════════
+function filterOffices(q) {
+  const ql = q.toLowerCase();
+  // Only HPO and SPO are selectable for submission
+  const submittable = ALL_OFFICES.filter(o => ['HPO','SPO'].includes((o.type||'').toUpperCase()));
+  renderOfficeList(submittable.filter(o =>
+    !q || o.name.toLowerCase().includes(ql) ||
+    (o.solId||'').toLowerCase().includes(ql) ||
+    (o.soName||'').toLowerCase().includes(ql)
+  ));
+}
+
+function renderOfficeList(list) {
+  const c = document.getElementById('office-list');
+  if (!list.length) { c.innerHTML = '<div class="no-items">No offices found.</div>'; return; }
+  c.innerHTML = list.map(o => {
+    const subs = getSubordinates(o.name);
+    const tc = typeCls(o.type);
+    return `
+      <div class="o-item ${selOffice&&selOffice.officeId===o.officeId?'sel':''}" onclick="pickOffice('${o.officeId}')">
+        <div class="o-ico ${tc}">${o.type||'?'}</div>
+        <div class="o-info">
+          <div class="o-name">${o.name}</div>
+          <div class="o-meta">
+            <span class="type-badge tb-${tc}">${o.type}</span>
+            <span>SOL: ${o.solId}</span>
+            ${o.soName ? `<span style="color:var(--muted2)">↑ ${o.soName}</span>` : ''}
+          </div>
+          ${subs.length ? `<div class="o-sub-count">+${subs.length} subordinate${subs.length>1?'s':''} will be included</div>` : ''}
+        </div>
+        <div class="o-chk">✓</div>
+      </div>`;
+  }).join('');
+}
+
+function pickOffice(id) {
+  selOffice = ALL_OFFICES.find(o => o.officeId === id);
+  const q = document.getElementById('office-search').value;
+  filterOffices(q);
+  document.getElementById('btn-s1').disabled = false;
+}
+
+// ════════════════════════════════════════
+//  DATE
+// ════════════════════════════════════════
+function getTodayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function setToday() {
+  reportDate = getTodayStr();
+  const i = document.getElementById('report-date');
+  if (i) i.value = reportDate;
+}
+function onDateChange() {
+  reportDate = document.getElementById('report-date').value;
+  const isT = reportDate === getTodayStr();
+  const tag = document.getElementById('today-tag');
+  tag.textContent = isT ? '✅ Set to today' : '📅 Custom date selected';
+  tag.style.cssText = isT ? '' : 'background:#fef3c7;color:#7a4f00';
+}
+function fmtDate(s) { if(!s)return''; return new Date(s+'T00:00:00').toLocaleDateString('en-IN',{weekday:'long',year:'numeric',month:'long',day:'numeric'}); }
+function fmtShort(s) { if(!s)return''; return new Date(s+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}); }
+
+// ════════════════════════════════════════
+//  DATA ENTRY
+//  Primary section = selected office
+//  Sub sections = all offices where soName === selected office's name
+// ════════════════════════════════════════
+function buildEntry() {
+  entryData = {};
+  const subs = getSubordinates(selOffice.name);
+  const sections = [
+    {...selOffice, isPrimary: true},
+    ...subs.map(s => ({...s, isPrimary: false}))
+  ];
+  sections.forEach(o => {
+    entryData[o.officeId] = {};
+    ACCOUNT_TYPES.forEach(t => { entryData[o.officeId][t.id] = 0; });
+  });
+
+  let html = '';
+  sections.forEach((o, idx) => {
+    const hcls = o.isPrimary ? 'primary' : 'subordinate';
+    const tag  = o.isPrimary ? `Reporting Office (${o.type})` : `Subordinate (${o.type})`;
+    html += `
+      <div class="office-section">
+        <div class="sec-hd ${hcls}">
+          <span class="sh-ic">${getTypeIcon(o.type)}</span>
+          <div class="sh-info">
+            <div class="sh-ttl">${o.name}</div>
+            <div class="sh-sub">SOL: ${o.solId} · ${o.soName||''}</div>
+          </div>
+          <span class="sh-tag">${tag}</span>
+        </div>
+        <div class="acc-grid">
+          ${ACCOUNT_TYPES.map(t => `
+            <div class="a-cell" id="cell-${o.officeId}-${t.id}">
+              <div class="a-lbl"><span class="a-dot" style="background:${t.color}"></span>${t.label}</div>
+              <input class="a-inp" type="number" min="0" id="inp-${o.officeId}-${t.id}"
+                placeholder="0"
+                oninput="handleInp('${o.officeId}','${t.id}',this.value)"
+                onfocus="this.select()">
+              <div class="a-step">
+                <button class="sb" onclick="stepInp('${o.officeId}','${t.id}',-1)">−</button>
+                <button class="sb" onclick="stepInp('${o.officeId}','${t.id}',1)">+</button>
+              </div>
+            </div>`).join('')}
+        </div>
+        <div class="sub-row">
+          <span class="lbl">Subtotal — ${o.name}</span>
+          <span class="val" id="sub-${o.officeId}">0</span>
+        </div>
+      </div>
+      ${idx < sections.length-1 ? '<div class="divider"></div>' : ''}`;
+  });
+
+  html += `<div class="btn-row">
+    <button class="btn btn-g" onclick="backToS(2)">← Back</button>
+    <button class="btn btn-p" onclick="goS4()">Review →</button>
+  </div>`;
+  document.getElementById('data-entry-body').innerHTML = html;
+  updateFT();
+}
+
+function handleInp(oid, tid, val) {
+  const n = Math.max(0, parseInt(val)||0);
+  entryData[oid][tid] = n;
+  document.getElementById(`cell-${oid}-${tid}`).classList.toggle('hv', n>0);
+  updSub(oid); updateFT();
+}
+function stepInp(oid, tid, d) {
+  const inp = document.getElementById(`inp-${oid}-${tid}`);
+  const nv = Math.max(0, (parseInt(inp.value)||0)+d);
+  inp.value = nv||''; handleInp(oid, tid, nv);
+}
+function updSub(oid) {
+  const t = Object.values(entryData[oid]).reduce((a,b)=>a+b,0);
+  const el = document.getElementById('sub-'+oid); if(el) el.textContent = t.toLocaleString();
+}
+function updateFT() {
+  let g = 0; Object.values(entryData).forEach(o=>Object.values(o).forEach(v=>g+=v));
+  document.getElementById('ft-num').textContent = g.toLocaleString();
+  document.getElementById('float-total').classList.toggle('show', g>0);
+}
+function getGrandTotal() {
+  let t=0; Object.values(entryData).forEach(o=>Object.values(o).forEach(v=>t+=v)); return t;
+}
+
+// ════════════════════════════════════════
+//  REVIEW
+// ════════════════════════════════════════
+function buildReview() {
+  const subs = getSubordinates(selOffice.name);
+  const sections = [selOffice, ...subs];
+  let html = `
+    <div class="rv-card">
+      <div class="rg"><div class="rg-hd"><span class="rg-ic">📮</span><div class="rg-lbl">Reporting Office</div></div><div class="rg-val">${selOffice.name}</div><div class="rg-sub">SOL: ${selOffice.solId} · ${selOffice.soName} · <span class="pill ${typePillCls(selOffice.type)}">${selOffice.type}</span></div></div>
+      <div class="rg"><div class="rg-hd"><span class="rg-ic">📅</span><div class="rg-lbl">Reporting Date</div></div><div class="rg-val">${fmtDate(reportDate)}</div></div>
+      <div class="rg"><div class="rg-hd"><span class="rg-ic">🔢</span><div class="rg-lbl">Grand Total</div></div><div class="rg-val" style="font-family:'DM Serif Display',serif;font-size:1.7rem">${getGrandTotal().toLocaleString()}</div><div class="rg-sub">across ${sections.length} office(s)</div></div>
+      <div class="rg"><div class="rg-hd"><span class="rg-ic">💾</span><div class="rg-lbl">Storage</div></div><div class="rg-val" style="font-size:.85rem">${window.isFirebaseReady&&window.isFirebaseReady()?'🔥 Firebase (permanent)':'💻 Demo mode'}</div></div>
+    </div>`;
+  sections.forEach(o => {
+    const d = entryData[o.officeId]||{};
+    const sub = Object.values(d).reduce((a,b)=>a+b,0);
+    const chips = ACCOUNT_TYPES.filter(t=>d[t.id]>0).map(t=>`<div class="chip"><span class="cd" style="background:${t.color}"></span><span style="color:var(--muted)">${t.label}</span><strong>${d[t.id]}</strong></div>`).join('');
+    html += `<div class="rv-card"><div class="rg">
+      <div class="rg-hd"><span class="rg-ic">${getTypeIcon(o.type)}</span><div class="rg-lbl">${o.officeId===selOffice.officeId?'Reporting Office':'Subordinate'}</div></div>
+      <div class="rg-val">${o.name}</div><div class="rg-sub">SOL: ${o.solId} · Subtotal: <strong>${sub.toLocaleString()}</strong></div>
+      ${chips ? `<div class="chips">${chips}</div>` : '<div style="font-size:.76rem;color:var(--muted);margin-top:5px">All zeros — will be recorded.</div>'}
+    </div></div>`;
+  });
+  document.getElementById('review-body').innerHTML = html;
+}
+
+// ════════════════════════════════════════
+//  SUBMIT
+// ════════════════════════════════════════
+async function doSubmit() {
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Saving…';
+  showLoad('Saving report to Firebase…');
+
+  const ref = 'REF'+Date.now().toString().slice(-8);
+  const sub = {
+    officeId: selOffice.officeId, officeName: selOffice.name,
+    officeType: selOffice.type, solId: selOffice.solId,
+    soName: selOffice.soName, contactPerson: selOffice.person,
+    phone: selOffice.phone, date: reportDate,
+    data: JSON.parse(JSON.stringify(entryData)),
+    total: getGrandTotal(), ref, ts: Date.now()
+  };
+
+  let docId = null;
+  if (window.fbSaveSubmission) docId = await window.fbSaveSubmission(sub);
+  if (!docId) localSubs.push(sub);
+
+  hideLoad(); btn.disabled=false; btn.innerHTML='✅ Submit Report';
+
+  const subs = getSubordinates(selOffice.name);
+  document.getElementById('s-sub').textContent = `Data for ${selOffice.name}${subs.length?' and '+subs.length+' subordinate office(s)':''} on ${fmtShort(reportDate)} has been ${docId?'saved to Firebase ✅':'saved in demo mode 💻'}.`;
+  document.getElementById('s-meta').innerHTML = `
+    <div class="m-row"><span class="mk">Reference ID</span><span class="mv">${ref}</span></div>
+    <div class="m-row"><span class="mk">Reporting Office</span><span class="mv">${selOffice.name}</span></div>
+    <div class="m-row"><span class="mk">Office Type</span><span class="mv">${selOffice.type}</span></div>
+    <div class="m-row"><span class="mk">SOL ID</span><span class="mv">${selOffice.solId}</span></div>
+    <div class="m-row"><span class="mk">Subordinates included</span><span class="mv">${subs.length}</span></div>
+    <div class="m-row"><span class="mk">Reporting Date</span><span class="mv">${fmtShort(reportDate)}</span></div>
+    <div class="m-row"><span class="mk">Grand Total</span><span class="mv">${getGrandTotal().toLocaleString()} accounts</span></div>
+    <div class="m-row"><span class="mk">Storage</span><span class="mv">${docId?'🔥 Firebase (permanent)':'💻 Demo mode'}</span></div>`;
+
+  showSP(5); updWiz(5);
+  toast(docId ? 'Saved to Firebase! 🔥' : 'Saved in demo mode', 'ok');
+}
+
+function resetAll() {
+  selOffice=null; entryData={};
+  document.getElementById('office-search').value='';
+  document.getElementById('btn-s1').disabled=true;
+  setToday(); document.getElementById('today-tag').textContent='✅ Set to today';
+  document.getElementById('today-tag').style.cssText='';
+  filterOffices('');   // only HPO + SPO
+  showSP(1); updWiz(1);
+  document.getElementById('float-total').classList.remove('show');
+}
+
+// ════════════════════════════════════════
+//  NAVIGATION
+// ════════════════════════════════════════
+function showSP(n) { for(let i=1;i<=5;i++){const e=document.getElementById('sp'+i);if(e)e.style.display=i===n?'':'none';} window.scrollTo({top:0,behavior:'smooth'}); if(n!==3)document.getElementById('float-total').classList.remove('show'); }
+function updWiz(n) {
+  document.getElementById('wizard').style.display = n>=5?'none':'flex';
+  for(let i=1;i<=4;i++){
+    const item=document.getElementById('wi'+i), dot=document.getElementById('wd'+i);
+    item.classList.remove('active','done');
+    if(i<n){item.classList.add('done');dot.textContent='✓';}
+    else if(i===n){item.classList.add('active');dot.textContent=i;}
+    else dot.textContent=i;
+  }
+}
+function goS2(){if(!selOffice)return;showSP(2);updWiz(2);}
+function goS3(){reportDate=document.getElementById('report-date').value;document.getElementById('s3-desc').textContent=`${selOffice.name} (${selOffice.type}) · ${fmtShort(reportDate)} · +${getSubordinates(selOffice.name).length} subordinate(s)`;buildEntry();showSP(3);updWiz(3);}
+function goS4(){buildReview();showSP(4);updWiz(4);}
+function backToS(n){showSP(n);updWiz(n);}
+function switchView(name,btn){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.querySelectorAll('.ntab').forEach(t=>t.classList.remove('active'));document.getElementById('view-'+name).classList.add('active');if(btn)btn.classList.add('active');document.getElementById('wizard').style.display=name==='submit'?'flex':'none';if(name==='dashboard')loadDash();if(name==='reports')loadReports();if(name==='admin'){buildOfficePreview();buildSMSTable();}}
+function requireAdmin(name,btn){if(adminLoggedIn)switchView(name,btn);else{pendingView={name,btn};switchView('admin-login',null);document.getElementById('wizard').style.display='none';}}
+function handleRoleClick(){if(adminLoggedIn)doLogout();else requireAdmin('dashboard',null);}
+
+// ════════════════════════════════════════
+//  AUTH
+// ════════════════════════════════════════
+function doLogin(){
+  const u=document.getElementById('admin-user').value.trim(),p=document.getElementById('admin-pass').value;
+  if(u===adminCreds.user&&p===adminCreds.pass){adminLoggedIn=true;document.getElementById('role-btn').textContent='🔑 Admin';if(pendingView){const{name,btn}=pendingView;pendingView=null;switchView(name,btn);}else switchView('dashboard',null);toast('Welcome, Admin!','ok');}
+  else{toast('Invalid credentials','err');document.getElementById('admin-pass').value='';}
+}
+function doLogout(){adminLoggedIn=false;document.getElementById('role-btn').textContent='👤 Staff';document.querySelectorAll('.ntab').forEach(t=>t.classList.remove('active'));document.querySelector('.ntab').classList.add('active');switchView('submit',document.querySelector('.ntab'));toast('Logged out');}
+function saveCreds(){const u=document.getElementById('new-user').value.trim(),p=document.getElementById('new-pass').value;if(!u||!p){toast('Enter both fields','warn');return;}adminCreds={user:u,pass:p};document.getElementById('new-user').value='';document.getElementById('new-pass').value='';toast('Saved!','ok');}
+
+// ════════════════════════════════════════
+//  EXCEL UPLOAD → SAVE TO FIREBASE
+// ════════════════════════════════════════
+function handleDrop(e){e.preventDefault();document.getElementById('drop-zone').classList.remove('drag');const f=e.dataTransfer.files[0];if(f)processXL(f);}
+function handleUpload(e){const f=e.target.files[0];if(f)processXL(f);e.target.value='';}
+
+async function processXL(file) {
+  if (!file.name.match(/\.xlsx?$/i)) { toast('Upload a .xlsx file','err'); return; }
+  showLoad('Parsing Excel file…');
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    try {
+      const wb = XLSX.read(e.target.result, {type:'binary'});
+      const shName = wb.SheetNames.find(n=>n.toLowerCase().includes('office'))||wb.SheetNames[0];
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[shName], {defval:''});
+
+      const offices = rows.map(r => ({
+        sno:         r['S.No']||r['SNO']||r['S No']||'',
+        name:        String(r['Office Name']||'').trim(),         // Col B
+        soName:      String(r['SO Name']||'').trim(),             // Col C = parent name
+        officeId:    String(r['Office ID']||'').trim(),
+        acctOfficeId:String(r['Account Office ID']||'').trim(),
+        solId:       String(r['SOL ID']||'').trim(),
+        type:        String(r['Office Type']||'').trim().toUpperCase(),
+        person:      String(r['Contact Person']||'').trim(),
+        phone:       String(r['Phone Number']||'').trim(),
+      })).filter(o => o.name);
+
+      if (!offices.length) { hideLoad(); toast('No valid rows. Check column headers.','err'); return; }
+
+      // ── Always parse Account Types sheet ──
+      const atName = wb.SheetNames.find(n=>n.toLowerCase().includes('account'));
+      if (atName) {
+        const atRows = XLSX.utils.sheet_to_json(wb.Sheets[atName], {defval:''});
+        const types = atRows
+          .map(r => ({
+            id:    String(r['Account Type ID']   || '').trim(),
+            label: String(r['Account Type Label']|| r['Account Type Label (shown in portal)'] || '').trim(),
+            color: String(r['Color (hex)']       || r['Color (hex code)'] || '#3b82f6').trim()
+          }))
+          .filter(t => t.id && t.label);
+        if (types.length) {
+          ACCOUNT_TYPES = types;
+          console.log("✅ Account types from Excel:", ACCOUNT_TYPES.map(t=>t.label));
+        } else {
+          console.warn("⚠️ Account Types sheet found but no valid rows parsed — keeping defaults");
+        }
+      } else {
+        console.warn("⚠️ No 'Account Types' sheet found — keeping default account types");
+      }
+
+      ALL_OFFICES = offices;
+
+      // 🔥 Save BOTH offices AND the freshly parsed account types to Firebase
+      showLoad('Saving to Firebase database…');
+      let saved = false;
+      if (window.fbSaveOffices) saved = await window.fbSaveOffices(offices, ACCOUNT_TYPES);
+
+      hideLoad();
+      renderOfficeList(ALL_OFFICES);
+      document.getElementById('sample-notice').style.display = 'none';
+      document.getElementById('up-ok-banner').style.display = 'flex';
+      document.getElementById('up-ok-txt').textContent = `${offices.length} offices + ${ACCOUNT_TYPES.length} account types loaded${saved?' and saved to Firebase 🔥':' (demo mode — will reset on refresh)'}`;
+      buildOfficePreview();
+      buildSMSTable();
+      populateTypeFilter();
+      toast(saved ? `✅ ${offices.length} offices + ${ACCOUNT_TYPES.length} account types saved to Firebase!` : `${offices.length} offices loaded (demo mode)`, 'ok');
+
+    } catch(err) { hideLoad(); toast('Parse error: '+err.message,'err'); }
+  };
+  reader.readAsBinaryString(file);
+}
+
+function buildOfficePreview() {
+  document.getElementById('office-card').style.display = 'block';
+  document.getElementById('loaded-info').textContent = `${ALL_OFFICES.length} offices total`;
+  document.getElementById('office-preview').innerHTML = ALL_OFFICES.map(o => {
+    const subs = getSubordinates(o.name);
+    return `<tr>
+      <td>${o.sno}</td>
+      <td><strong>${o.name}</strong></td>
+      <td style="color:var(--muted)">${o.soName||'—'}</td>
+      <td><code style="font-size:.72rem">${o.officeId}</code></td>
+      <td style="font-size:.75rem;color:var(--muted)">${o.acctOfficeId||'—'}</td>
+      <td>${o.solId}</td>
+      <td><span class="pill ${typePillCls(o.type)}">${o.type}</span></td>
+      <td>${subs.length ? `<span class="pill b-pill">${subs.length} office${subs.length>1?'s':''}</span>` : '<span style="color:var(--muted);font-size:.76rem">none</span>'}</td>
+      <td>${o.person}</td>
+      <td style="font-size:.76rem">${o.phone}</td>
+    </tr>`;
+  }).join('');
+
+  // Show account types preview
+  document.getElementById('at-card').style.display = 'block';
+  document.getElementById('at-info').textContent = `${ACCOUNT_TYPES.length} account types — these are the fields shown in the data entry form`;
+  document.getElementById('at-preview').innerHTML = ACCOUNT_TYPES.map(t =>
+    `<div style="display:flex;align-items:center;gap:7px;background:var(--bg);border:1.5px solid var(--line);border-radius:9px;padding:8px 13px;">
+      <span style="width:10px;height:10px;border-radius:50%;background:${t.color};flex-shrink:0;display:inline-block"></span>
+      <span style="font-size:.82rem;font-weight:600">${t.label}</span>
+      <code style="font-size:.7rem;color:var(--muted);background:var(--line2);padding:1px 6px;border-radius:4px">${t.id}</code>
+    </div>`
+  ).join('');
+}
+
+// ════════════════════════════════════════
+//  DASHBOARD
+// ════════════════════════════════════════
+async function loadDash() {
+  showLoad('Loading dashboard…');
+  const subs = await getAllSubs(); hideLoad();
+  const today = getTodayStr();
+  const submittable = ALL_OFFICES.filter(o => ['HPO','SPO'].includes((o.type||'').toUpperCase()));
+  const subIds = new Set(subs.map(s=>s.officeId));
+  const grand = subs.reduce((a,s)=>a+s.total,0);
+  const todaySubs = subs.filter(s=>s.date===today);
+
+  document.getElementById('st-total').textContent = grand.toLocaleString();
+  document.getElementById('st-sub').textContent = subIds.size;
+  document.getElementById('st-pend').textContent = Math.max(0, submittable.length - subIds.size);
+  document.getElementById('st-today').textContent = todaySubs.length;
+  document.getElementById('dash-date').textContent = fmtShort(today);
+
+  const tt={}; ACCOUNT_TYPES.forEach(t=>tt[t.id]=0);
+  subs.forEach(s=>Object.values(s.data).forEach(od=>Object.entries(od).forEach(([tid,v])=>{if(tt[tid]!==undefined)tt[tid]+=v;})));
+  const maxT = Math.max(...Object.values(tt),1);
+  document.getElementById('type-chart').innerHTML = ACCOUNT_TYPES.map(t=>`<div class="b-row"><div class="b-lbl">${t.label}</div><div class="b-trk"><div class="b-fill" style="width:${tt[t.id]/maxT*100}%;background:${t.color}">${tt[t.id]}</div></div><div class="b-num">${tt[t.id]}</div></div>`).join('');
+
+  const s = subIds.size, p = Math.max(0, submittable.length - s), pct = submittable.length ? Math.round(s/submittable.length*100) : 0;
+  document.getElementById('status-chart').innerHTML=`
+    <div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:4px"><span style="color:var(--muted)">Completion</span><strong>${pct}%</strong></div><div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:var(--green)"></div></div></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:13px">
+      <div style="background:var(--gsoft);border-radius:9px;padding:11px;text-align:center"><div style="font-family:'DM Serif Display',serif;font-size:1.5rem;color:var(--green)">${s}</div><div style="font-size:.7rem;color:var(--muted);margin-top:2px">Submitted</div></div>
+      <div style="background:var(--asoft);border-radius:9px;padding:11px;text-align:center"><div style="font-family:'DM Serif Display',serif;font-size:1.5rem;color:var(--amber)">${p}</div><div style="font-size:.7rem;color:var(--muted);margin-top:2px">Pending</div></div>
+    </div>`;
+
+  document.getElementById('dash-tbody').innerHTML = subs.slice(0,12).map(s=>`
+    <tr>
+      <td><strong>${s.officeName}</strong></td>
+      <td><span class="pill ${typePillCls(s.officeType)}">${s.officeType||'—'}</span></td>
+      <td>${s.solId||'—'}</td>
+      <td style="color:var(--muted)">${s.soName||'—'}</td>
+      <td>${fmtShort(s.date)}</td>
+      <td><strong>${s.total.toLocaleString()}</strong></td>
+      <td style="font-size:.72rem;color:var(--muted)">${s.ref||'—'}</td>
+      <td><button onclick="dashDelete('${s.id||s.ref}','${s.officeName.replace(/'/g,"\\'")}','${s.date}','${s.total}')"
+        style="background:var(--rsoft);color:var(--red);border:1px solid #fca5a5;border-radius:7px;padding:4px 8px;cursor:pointer;font-size:.82rem;line-height:1" title="Delete">🗑️</button></td>
+    </tr>`).join('');
+}
+
+// ════════════════════════════════════════
+//  REPORTS
+// ════════════════════════════════════════
+async function loadReports() {
+  showLoad('Loading reports…');
+  const subs = await getAllSubs();
+  hideLoad();
+
+  // Build a flat list: one row per OFFICE (not per submission)
+  // A submission from "Danishpet S.O" may contain data for itself + 3 subordinates → 4 rows
+  const submittedOfficeIds = new Set();
+  allReports = [];
+
+  subs.forEach(sub => {
+    const officeIds = Object.keys(sub.data || {});
+    officeIds.forEach(oid => {
+      const off   = ALL_OFFICES.find(o => o.officeId === oid);
+      const counts = sub.data[oid] || {};
+      const total  = Object.values(counts).reduce((a,b) => a+b, 0);
+      submittedOfficeIds.add(oid);
+      allReports.push({
+        // firebase doc id — used for edit/delete (same sub id for all rows of this submission)
+        id:          sub.id || null,
+        ref:         sub.ref || '—',
+        // which office THIS row is for
+        officeId:    oid,
+        officeName:  off ? off.name  : oid,
+        officeType:  off ? off.type  : sub.officeType || '—',
+        solId:       off ? off.solId : '—',
+        soName:      off ? off.soName: '—',
+        // the reporting (top-level) office of this submission
+        reportingOfficeId:   sub.officeId,
+        reportingOfficeName: sub.officeName,
+        date:        sub.date,
+        counts,          // {SB:5, CA:3 …}
+        officeTotal: total,
+        _pending:    false,
+        // keep full sub ref so Edit/Delete still works on the whole submission
+        _sub: sub,
+      });
+    });
+  });
+
+  // Add pending rows for offices that haven't submitted at all
+  ALL_OFFICES
+    .filter(o => ['HPO','SPO'].includes((o.type||'').toUpperCase()) && !submittedOfficeIds.has(o.officeId))
+    .forEach(o => allReports.push({
+      id: null, ref: '—',
+      officeId: o.officeId, officeName: o.name,
+      officeType: o.type, solId: o.solId, soName: o.soName,
+      reportingOfficeId: o.officeId, reportingOfficeName: o.name,
+      date: '—', counts: {}, officeTotal: 0,
+      _pending: true, _sub: null,
+    }));
+
+  document.getElementById('rpt-thead').innerHTML =
+    '<tr><th>Office Name</th><th>Type</th><th>SOL ID</th><th>SO Name</th><th>Reporting Office</th><th>Date</th>' +
+    ACCOUNT_TYPES.map(t=>`<th>${t.label}</th>`).join('') +
+    '<th>Total</th><th>Ref</th><th>Status</th><th>Actions</th></tr>';
+
+  populateTypeFilter();
+  filterRpt();
+}
+
+function filterRpt() {
+  const q  = (document.getElementById('rpt-q')?.value  || '').toLowerCase();
+  const tp = (document.getElementById('rpt-type')?.value || '');
+  const st = (document.getElementById('rpt-status')?.value || '');
+
+  const list = allReports.filter(r => {
+    const mq = !q  || r.officeName.toLowerCase().includes(q) || (r.solId||'').toLowerCase().includes(q) || (r.reportingOfficeName||'').toLowerCase().includes(q);
+    const mt = !tp || r.officeType === tp;
+    const ms = !st || (st==='Pending' ? r._pending : !r._pending);
+    return mq && mt && ms;
+  });
+
+  const recId = r => r.id || r.ref;
+
+  document.getElementById('rpt-tbody').innerHTML = list.map(r => {
+    const isOwn = r.officeId === r.reportingOfficeId;
+    return `<tr ${r._pending ? 'style="opacity:.55"' : ''}>
+      <td>
+        <strong>${r.officeName}</strong>
+        ${!isOwn ? `<div style="font-size:.68rem;color:var(--muted);margin-top:1px">subordinate</div>` : ''}
+      </td>
+      <td><span class="pill ${typePillCls(r.officeType)}">${r.officeType||'—'}</span></td>
+      <td>${r.solId||'—'}</td>
+      <td style="color:var(--muted);font-size:.78rem">${r.soName||'—'}</td>
+      <td style="font-size:.78rem;color:var(--muted)">${isOwn ? '<span style="color:var(--green);font-weight:600">Self</span>' : r.reportingOfficeName}</td>
+      <td>${r._pending ? '—' : fmtShort(r.date)}</td>
+      ${ACCOUNT_TYPES.map(t => `<td>${r._pending ? '—' : (r.counts[t.id]||0)}</td>`).join('')}
+      <td><strong>${r._pending ? '—' : r.officeTotal.toLocaleString()}</strong></td>
+      <td style="font-size:.72rem;color:var(--muted)">${r.ref||'—'}</td>
+      <td><span class="pill ${r._pending ? 'a-pill' : 'g-pill'}">${r._pending ? 'Pending' : 'Submitted'}</span></td>
+      <td>
+        ${r._pending
+          ? '<span style="color:var(--muted);font-size:.74rem">—</span>'
+          : `<div style="display:flex;gap:5px">
+               <button class="btn btn-sm" style="background:var(--bsoft);color:var(--blue);padding:5px 10px" onclick="openEdit('${recId(r)}')">✏️ Edit</button>
+               <button class="btn btn-sm" style="background:var(--rsoft);color:var(--red);padding:5px 10px"   onclick="openDelete('${recId(r)}')">🗑️</button>
+             </div>`
+        }
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function exportCSV() {
+  const h = ['Office Name','Type','SOL ID','SO Name','Reporting Office','Date',
+             ...ACCOUNT_TYPES.map(t=>t.label),'Total','Ref','Status'];
+  const rows = allReports.map(r => [
+    r.officeName, r.officeType||'', r.solId||'', r.soName||'',
+    r.reportingOfficeName||'', r._pending ? '—' : r.date,
+    ...ACCOUNT_TYPES.map(t => r._pending ? '—' : (r.counts[t.id]||0)),
+    r._pending ? '—' : r.officeTotal,
+    r.ref||'—',
+    r._pending ? 'Pending' : 'Submitted'
+  ]);
+  const csv = [h,...rows].map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = `report_${getTodayStr()}.csv`;
+  a.click();
+  toast('CSV exported!','ok');
+}
+
+async function getAllSubs() {
+  if (window.isFirebaseReady&&window.isFirebaseReady()) { const r=await window.fbLoadSubmissions(); if(r) return r; }
+  return [...localSubs];
+}
+
+// ════════════════════════════════════════
+//  SMS
+// ════════════════════════════════════════
+function updatePrev() {
+  const t=document.getElementById('sms-tmpl'),p=document.getElementById('sms-prev');if(!t||!p)return;
+  p.textContent=t.value.replace('{name}','Suresh Babu').replace('{office}','Danishpet S.O').replace('{solid}','500101').replace('{date}',fmtShort(getTodayStr())).replace('{link}',window.location.href.split('?')[0]);
+}
+
+async function buildSMSTable() {
+  const subs = await getAllSubs();   // ← fetch from Firebase, not just localSubs
+  const subIds = new Set(subs.map(s => s.officeId));
+  const tbody = document.getElementById('sms-tbody'); if (!tbody) return;
+  const submittable = ALL_OFFICES.filter(o => ['HPO','SPO'].includes((o.type||'').toUpperCase()));
+  tbody.innerHTML = submittable.map(o => {
+    const done = subIds.has(o.officeId);
+    return `<tr>
+      <td><strong>${o.name}</strong></td>
+      <td><span class="pill ${typePillCls(o.type)}">${o.type}</span></td>
+      <td>${o.solId}</td>
+      <td>${o.person||'—'}</td>
+      <td style="font-size:.75rem">${o.phone ? '+91'+o.phone : '—'}</td>
+      <td><span class="pill ${done?'g-pill':'a-pill'}">${done?'Submitted':'Pending'}</span></td>
+      <td>${done
+        ? '<span style="color:var(--muted);font-size:.75rem">Done</span>'
+        : `<button class="btn btn-sm btn-amb" onclick="sendSMS('${o.officeId}')">📱 Send</button>`
+      }</td>
+    </tr>`;
+  }).join('');
+}
+
+function sendSMS(id) {
+  const o=ALL_OFFICES.find(x=>x.officeId===id);
+  if(!o||!o.phone){toast('No phone for '+id,'warn');return;}
+  const key=document.getElementById('sms-key').value.trim();
+  const tmpl=document.getElementById('sms-tmpl').value;
+  const num='+91'+o.phone.replace(/\D/g,'');
+  const msg=tmpl.replace('{name}',o.person||'Officer').replace('{office}',o.name).replace('{solid}',o.solId).replace('{date}',fmtShort(getTodayStr())).replace('{link}',window.location.href.split('?')[0]);
+  if(!key){toast(`📱 Demo SMS → ${o.person} (${num})\n"${msg.substring(0,80)}…"`,'ok');return;}
+  const params=new URLSearchParams({apikey:key,numbers:num.replace('+',''),message:msg,sender:document.getElementById('sms-sender').value.trim()});
+  fetch(document.getElementById('sms-api').value,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:params}).then(r=>r.json()).then(d=>toast(d.status==='success'?`SMS sent to ${o.person}`:'SMS API error','ok')).catch(()=>toast(`📱 Demo: SMS to ${o.person}`,'ok'));
+}
+
+async function sendAllSMS() {
+  const subs = await getAllSubs();
+  const subIds = new Set(subs.map(s => s.officeId));
+  const pending = ALL_OFFICES.filter(o =>
+    ['HPO','SPO'].includes((o.type||'').toUpperCase()) && !subIds.has(o.officeId) && o.phone
+  );
+  if (!pending.length) { toast('All offices have submitted!','ok'); return; }
+  pending.forEach(o => sendSMS(o.officeId));
+  toast(`Reminders sent to ${pending.length} pending offices`, 'ok');
+}
+
+function populateTypeFilter() {
+  const sel=document.getElementById('rpt-type');if(!sel)return;
+  const types=[...new Set(ALL_OFFICES.map(o=>o.type).filter(Boolean))].sort();
+  sel.innerHTML='<option value="">All Types</option>'+types.map(t=>`<option>${t}</option>`).join('');
+}
+
+// ── Delete directly from dashboard ──
+function dashDelete(id, officeName, date, total) {
+  _deleteId    = id || null;
+  _deleteLocal = { id, ref: id, officeName, date, total: parseInt(total)||0 };
+  document.getElementById('del-modal-body').innerHTML = `
+    <div style="background:var(--rsoft);border:1px solid #fca5a5;border-radius:9px;padding:12px 14px;margin-bottom:10px">
+      <div style="font-weight:600;margin-bottom:3px">⚠️ You are about to permanently delete:</div>
+      <div style="font-size:.82rem;color:var(--ink2)">
+        <div>Office: <strong>${officeName}</strong></div>
+        <div>Date: <strong>${fmtShort(date)}</strong></div>
+        <div>Total: <strong>${parseInt(total).toLocaleString()} accounts</strong></div>
+      </div>
+    </div>
+    This will permanently remove this submission from Firebase. This action <strong>cannot be undone</strong>.`;
+  document.getElementById('del-modal').classList.remove('hidden');
+  // After delete, refresh dashboard instead of reports
+  _deleteCallback = () => loadDash();
+}
+let _deleteCallback = null;
+
+// ════════════════════════════════════════
+//  EDIT / DELETE
+// ════════════════════════════════════════
+let _editRecord  = null;   // the full submission record being edited
+let _editData    = {};     // live copy of data being edited {officeId: {typeId: count}}
+let _deleteId    = null;   // firebase doc id to delete
+let _deleteLocal = null;   // ref record for local fallback
+
+// ── Open edit modal ──
+function openEdit(recId) {
+  const rec = allReports.find(r => (r.id||r.ref) === recId);
+  if (!rec || rec._pending) return;
+  // rec is a flat per-office row — _sub holds the FULL submission with all offices
+  const fullSub = rec._sub;
+  if (!fullSub) return;
+  _editRecord = fullSub;
+  _editData   = JSON.parse(JSON.stringify(fullSub.data || {}));
+
+  document.getElementById('edit-modal-sub').textContent =
+    `${fullSub.officeName} · ${fmtShort(fullSub.date)} · Ref: ${fullSub.ref||'—'}`;
+
+  // Build edit form: one section per office in the submission data
+  const officeIds = Object.keys(_editData);
+  let html = '';
+
+  officeIds.forEach((oid, idx) => {
+    const off    = ALL_OFFICES.find(o => o.officeId === oid);
+    const name   = off ? off.name : oid;
+    const isMain = oid === fullSub.officeId;
+    html += `
+      <div style="margin-bottom:${idx < officeIds.length-1 ? '20px' : '0'}">
+        <div style="display:flex;align-items:center;gap:8px;padding:9px 13px;border-radius:9px;margin-bottom:11px;background:${isMain?'linear-gradient(135deg,#0c1824,#162535)':'linear-gradient(135deg,#1356e4,#4d8aff)'};color:#fff">
+          <span style="font-size:.9rem">${isMain?'📮':'📬'}</span>
+          <div>
+            <div style="font-size:.83rem;font-weight:600">${name}</div>
+            <div style="font-size:.67rem;opacity:.65">${isMain?'Reporting Office':'Subordinate'} · SOL: ${off?.solId||oid}</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+          ${ACCOUNT_TYPES.map(t => {
+            const val = (_editData[oid]||{})[t.id] || 0;
+            return `<div style="background:var(--bg);border:1.5px solid var(--line);border-radius:9px;padding:9px 8px">
+              <div style="font-size:.63rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);display:flex;align-items:center;gap:3px;margin-bottom:5px">
+                <span style="width:5px;height:5px;border-radius:50%;background:${t.color};flex-shrink:0;display:inline-block"></span>${t.label}
+              </div>
+              <input type="number" min="0"
+                style="width:100%;border:none;background:transparent;font-family:'DM Serif Display',serif;font-size:1.25rem;color:var(--ink);outline:none;text-align:center;-moz-appearance:textfield"
+                value="${val}"
+                oninput="updateEditVal('${oid}','${t.id}',this.value)"
+                onfocus="this.select()">
+            </div>`;
+          }).join('')}
+        </div>
+        <div style="display:flex;justify-content:space-between;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 12px;margin-top:8px;font-size:.79rem">
+          <span style="color:var(--muted)">Subtotal — ${name}</span>
+          <strong id="edit-sub-${oid}">${Object.values(_editData[oid]||{}).reduce((a,b)=>a+b,0)}</strong>
+        </div>
+      </div>
+      ${idx < officeIds.length-1 ? '<div style="height:1px;background:var(--line2);margin:4px 0"></div>' : ''}`;
+  });
+
+  // Grand total display
+  const initGrand = Object.values(_editData).reduce((a,od)=>a+Object.values(od).reduce((b,v)=>b+v,0),0);
+  html += `<div style="display:flex;justify-content:space-between;align-items:center;background:var(--ink);color:#fff;border-radius:9px;padding:10px 14px;margin-top:14px">
+    <span style="font-size:.82rem">Grand Total</span>
+    <span id="edit-grand" style="font-family:'DM Serif Display',serif;font-size:1.35rem;color:#7dd3fc">${initGrand}</span>
+  </div>`;
+
+  document.getElementById('edit-modal-body').innerHTML = html;
+  document.getElementById('edit-modal').classList.remove('hidden');
+}
+
+function updateEditVal(oid, tid, val) {
+  if (!_editData[oid]) _editData[oid] = {};
+  _editData[oid][tid] = Math.max(0, parseInt(val)||0);
+  // update subtotal
+  const sub = Object.values(_editData[oid]).reduce((a,b)=>a+b,0);
+  const subEl = document.getElementById(`edit-sub-${oid}`);
+  if (subEl) subEl.textContent = sub.toLocaleString();
+  // update grand
+  const grand = Object.values(_editData).reduce((a,od)=>a+Object.values(od).reduce((b,v)=>b+v,0),0);
+  const grandEl = document.getElementById('edit-grand');
+  if (grandEl) grandEl.textContent = grand.toLocaleString();
+}
+
+async function saveEdit() {
+  if (!_editRecord) return;
+  const newTotal = Object.values(_editData).reduce((a,od)=>a+Object.values(od).reduce((b,v)=>b+v,0),0);
+  showLoad('Saving changes…');
+
+  const updatePayload = { data: _editData, total: newTotal };
+
+  if (_editRecord.id && window.fbUpdateSubmission) {
+    const ok = await window.fbUpdateSubmission(_editRecord.id, updatePayload);
+    hideLoad();
+    if (ok) {
+      toast('Submission updated ✅', 'ok');
+      closeEditModal();
+      loadReports();
+    } else {
+      // fallback: update local
+      const idx = localSubs.findIndex(s => s.ref === _editRecord.ref);
+      if (idx > -1) { localSubs[idx].data = _editData; localSubs[idx].total = newTotal; }
+      hideLoad(); toast('Updated in demo mode', 'ok'); closeEditModal(); loadReports();
+    }
+  } else {
+    // local only
+    const idx = localSubs.findIndex(s => s.ref === _editRecord.ref);
+    if (idx > -1) { localSubs[idx].data = _editData; localSubs[idx].total = newTotal; }
+    hideLoad(); toast('Updated in demo mode', 'ok'); closeEditModal(); loadReports();
+  }
+}
+
+function closeEditModal() {
+  document.getElementById('edit-modal').classList.add('hidden');
+  _editRecord = null; _editData = {};
+}
+
+// ── Open delete confirm ──
+function openDelete(recId) {
+  const rec = allReports.find(r => (r.id||r.ref) === recId);
+  if (!rec || rec._pending) return;
+  const fullSub    = rec._sub;
+  _deleteId        = fullSub?.id || rec.id || null;
+  _deleteLocal     = fullSub || rec;
+  document.getElementById('del-modal-body').innerHTML = `
+    <div style="background:var(--rsoft);border:1px solid #fca5a5;border-radius:9px;padding:12px 14px;margin-bottom:10px">
+      <div style="font-weight:600;margin-bottom:3px">⚠️ You are about to permanently delete:</div>
+      <div style="font-size:.82rem;color:var(--ink2)">
+        <div>Office: <strong>${fullSub?.officeName || rec.officeName}</strong></div>
+        <div>Date: <strong>${fmtShort(fullSub?.date || rec.date)}</strong></div>
+        <div>Total: <strong>${(fullSub?.total || rec.officeTotal || 0).toLocaleString()} accounts</strong></div>
+        <div>Ref: <strong>${fullSub?.ref || rec.ref || '—'}</strong></div>
+      </div>
+    </div>
+    This will permanently remove this submission from Firebase. This action <strong>cannot be undone</strong>.`;
+  document.getElementById('del-modal').classList.remove('hidden');
+}
+
+async function confirmDelete() {
+  showLoad('Deleting…');
+  let ok = false;
+  if (_deleteId && window.fbDeleteSubmission) {
+    ok = await window.fbDeleteSubmission(_deleteId);
+  }
+  if (!ok) {
+    // local fallback
+    const idx = localSubs.findIndex(s => s.ref === _deleteLocal?.ref);
+    if (idx > -1) localSubs.splice(idx, 1);
+    ok = true;
+  }
+  hideLoad();
+  if (ok) { toast('Submission deleted', 'ok'); closeDelModal(); if(_deleteCallback){_deleteCallback();_deleteCallback=null;}else loadReports(); }
+  else    { toast('Delete failed', 'err'); closeDelModal(); }
+}
+
+function closeDelModal() {
+  document.getElementById('del-modal').classList.add('hidden');
+  _deleteId = null; _deleteLocal = null;
+}
+
+// Close modals on overlay click
+document.getElementById('edit-modal').addEventListener('click', function(e){ if(e.target===this) closeEditModal(); });
+document.getElementById('del-modal').addEventListener('click', function(e){ if(e.target===this) closeDelModal(); });
+
+// ════════════════════════════════════════
+//  MODAL / LOAD / TOAST
+// ════════════════════════════════════════
+function showModal(){document.getElementById('setup-modal').classList.remove('hidden');}
+function hideModal(){document.getElementById('setup-modal').classList.add('hidden');}
+document.getElementById('setup-modal').addEventListener('click',function(e){if(e.target===this)hideModal();});
+function showLoad(m){document.getElementById('lov-msg').textContent=m||'Loading…';document.getElementById('lov').classList.remove('hidden');}
+function hideLoad(){document.getElementById('lov').classList.add('hidden');}
+let _tt;
+function toast(msg,type=''){const e=document.getElementById('toast');e.textContent=msg;e.className='toast '+(type||'')+' show';clearTimeout(_tt);_tt=setTimeout(()=>e.classList.remove('show'),3400);}
+</script>
+</body>
+</html>
