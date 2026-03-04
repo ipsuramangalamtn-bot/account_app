@@ -127,6 +127,7 @@ document.addEventListener("DOMContentLoaded", () => {
   --amber:#f59e0b;--asoft:#fef3c7;
   --red:#e53935;--rsoft:#fde8e8;
   --cyan:#0891b2;--csoft:#e0f5f9;
+  --purple:#7c3aed;--psoft:#ede9fe;
   --r:14px;--r2:10px;
   --sh:0 2px 18px rgba(12,24,36,.07);
   --sh2:0 8px 36px rgba(12,24,36,.13)
@@ -201,20 +202,40 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--ink);min-hei
 .inp:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(19,86,228,.1)}
 .inp-ico{position:relative}.inp-ico .ic{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:.88rem;pointer-events:none}.inp-ico .inp{padding-left:33px}
 
-/* ── OFFICE LIST ── */
-.o-list{display:flex;flex-direction:column;gap:7px;max-height:400px;overflow-y:auto;padding-right:2px}
-.o-list::-webkit-scrollbar{width:4px}.o-list::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
-.o-item{display:flex;align-items:flex-start;gap:10px;padding:12px 13px;border:1.5px solid var(--line);border-radius:var(--r2);cursor:pointer;transition:all .18s;background:var(--bg)}
-.o-item:hover,.o-item.sel{border-color:var(--blue);background:var(--bsoft)}
-.o-ico{width:36px;height:36px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.78rem;font-weight:700;color:#fff;margin-top:1px}
-.o-ico.so{background:linear-gradient(135deg,#0891b2,#06b6d4)}.o-ico.hpo{background:linear-gradient(135deg,#7c3aed,#a855f7)}.o-ico.spo{background:linear-gradient(135deg,#1356e4,#4d8aff)}.o-ico.other{background:linear-gradient(135deg,#64748b,#94a3b8)}
-.o-info{flex:1;min-width:0}
-.o-name{font-size:.86rem;font-weight:600;line-height:1.3}
-.o-meta{font-size:.7rem;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
-.o-sub-count{font-size:.7rem;color:var(--blue);background:var(--bsoft);padding:1px 7px;border-radius:20px;font-weight:600;margin-top:3px;display:inline-block}
-.o-chk{width:19px;height:19px;border-radius:50%;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:.58rem;color:transparent;flex-shrink:0;transition:all .2s;margin-top:2px}
-.o-item.sel .o-chk{background:var(--blue);border-color:var(--blue);color:#fff}
-.no-items{text-align:center;padding:28px;color:var(--muted);font-size:.83rem}
+/* ── OFFICE GRID CARDS ── */
+.o-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;max-height:430px;overflow-y:auto;padding-right:2px}
+@media(min-width:460px){.o-grid{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:600px){.o-grid{grid-template-columns:repeat(4,1fr)}}
+.o-grid::-webkit-scrollbar{width:4px}.o-grid::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+.g-card{border:1.5px solid var(--line);border-radius:13px;padding:14px 11px 12px;cursor:pointer;transition:all .2s;background:#fff;text-align:center;position:relative;overflow:hidden;animation:fadeCard .25s ease both}
+@keyframes fadeCard{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.g-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3.5px;transition:background .2s}
+.g-card.hpo::before{background:linear-gradient(90deg,#7c3aed,#a855f7)}
+.g-card.spo::before{background:linear-gradient(90deg,#1356e4,#4d8aff)}
+.g-card:hover{border-color:var(--blue);transform:translateY(-2px);box-shadow:0 8px 22px rgba(19,86,228,.13)}
+.g-card.sel{border-color:var(--blue);background:var(--bsoft);box-shadow:0 8px 22px rgba(19,86,228,.18)}
+.g-card.sel.hpo{border-color:var(--purple);background:var(--psoft);box-shadow:0 8px 22px rgba(124,58,237,.15)}
+.g-card.sel.hpo::before{background:linear-gradient(90deg,#7c3aed,#a855f7)}
+.g-chk{position:absolute;top:8px;right:8px;width:19px;height:19px;border-radius:50%;border:1.5px solid var(--line);background:#fff;display:flex;align-items:center;justify-content:center;font-size:.58rem;color:transparent;transition:all .2s}
+.g-card.sel .g-chk{background:var(--blue);border-color:var(--blue);color:#fff}
+.g-card.sel.hpo .g-chk{background:var(--purple);border-color:var(--purple)}
+.g-ico{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:.78rem;font-weight:700;color:#fff;margin:0 auto 10px;letter-spacing:.02em}
+.g-ico.hpo{background:linear-gradient(135deg,#7c3aed,#a855f7)}
+.g-ico.spo{background:linear-gradient(135deg,#1356e4,#4d8aff)}
+.g-name{font-size:.79rem;font-weight:600;line-height:1.3;margin-bottom:4px;color:var(--ink)}
+.g-sol{font-size:.63rem;color:var(--muted)}
+.g-sub-badge{margin-top:7px;font-size:.6rem;color:var(--blue);background:var(--bsoft);padding:2px 8px;border-radius:20px;font-weight:600;display:inline-block}
+.g-card.hpo .g-sub-badge{color:var(--purple);background:var(--psoft)}
+.no-items{text-align:center;padding:30px;color:var(--muted);font-size:.83rem}
+/* ── SELECTED BANNER ── */
+.sel-banner{display:none;align-items:center;gap:10px;background:var(--bsoft);border:1.5px solid #b8d0ff;border-radius:var(--r2);padding:11px 14px;margin-top:13px}
+.sel-banner.show{display:flex}
+.sel-banner.hpo-sel{background:var(--psoft);border-color:#c4b5fd}
+.sb-ico{font-size:1.1rem;flex-shrink:0}
+.sb-info{flex:1;min-width:0}
+.sb-name{font-size:.85rem;font-weight:600}
+.sb-meta{font-size:.7rem;color:var(--muted);margin-top:2px}
+/* keep old classes for other views */
 .type-badge{display:inline-flex;padding:1px 6px;border-radius:20px;font-size:.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
 .tb-so{background:var(--csoft);color:var(--cyan)}.tb-hpo{background:#ede9fe;color:#7c3aed}.tb-spo{background:var(--bsoft);color:var(--blue)}.tb-other{background:var(--line2);color:var(--muted)}
 
@@ -429,11 +450,18 @@ tbody tr:last-child td{border-bottom:none}tbody tr:hover td{background:var(--bg)
       <div class="card-hd"><div class="sub">Step 1 of 4</div><h2>Select Your Office</h2><p>Showing HPO and SPO offices only</p></div>
       <div class="card-body">
         <div class="field inp-ico">
-          <label>Search by name, SOL ID or type</label>
+          <label>Search by name or SOL ID</label>
           <span class="ic">🔍</span>
           <input class="inp" id="office-search" type="text" placeholder="e.g. Danishpet, 501002…" oninput="filterOffices(this.value)">
         </div>
-        <div class="o-list" id="office-list"></div>
+        <div class="o-grid" id="office-list"></div>
+        <div class="sel-banner" id="sel-banner">
+          <span class="sb-ico">📮</span>
+          <div class="sb-info">
+            <div class="sb-name" id="sel-banner-name">—</div>
+            <div class="sb-meta" id="sel-banner-meta">—</div>
+          </div>
+        </div>
         <div class="info-box" id="sample-notice" style="margin-top:12px">
           <span>ℹ️</span><span>Using sample data. Admin: upload your Excel in ⚙️ Admin — it will be saved to Firebase and loaded here automatically for all users.</span>
         </div>
@@ -502,7 +530,7 @@ tbody tr:last-child td{border-bottom:none}tbody tr:hover td{background:var(--bg)
         <div class="field"><label>Username</label><input class="inp" id="admin-user" type="text" placeholder="admin" autocomplete="off"></div>
         <div class="field"><label>Password</label><input class="inp" id="admin-pass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
         <button class="btn btn-p btn-full" onclick="doLogin()" style="margin-top:4px">Login →</button>
-        <!-- ═══ <p style="font-size:.7rem;color:var(--muted);text-align:center;margin-top:11px">Default: <code>admin</code> / <code>admin123</code></p>═══ -->
+        <p style="font-size:.7rem;color:var(--muted);text-align:center;margin-top:11px">Default: <code>admin</code> / <code>admin123</code></p>
       </div>
     </div>
   </div>
@@ -791,7 +819,7 @@ let entryData     = {};
 let localSubs     = [];
 let allReports    = [];
 let adminLoggedIn = false;
-let adminCreds    = {user:'admin', pass:'SAJ_POST099'};
+let adminCreds    = {user:'admin', pass:'admin123'};
 let pendingView   = null;
 
 // ── Sample (mirrors exact column structure) ──
@@ -911,23 +939,19 @@ function filterOffices(q) {
 
 function renderOfficeList(list) {
   const c = document.getElementById('office-list');
-  if (!list.length) { c.innerHTML = '<div class="no-items">No offices found.</div>'; return; }
-  c.innerHTML = list.map(o => {
-    const subs = getSubordinates(o.name);
-    const tc = typeCls(o.type);
+  if (!list.length) { c.innerHTML = '<div class="no-items" style="grid-column:1/-1">No offices found.</div>'; return; }
+  c.innerHTML = list.map((o, i) => {
+    const subs  = getSubordinates(o.name);
+    const tc    = o.type === 'HPO' ? 'hpo' : 'spo';
+    const isSel = selOffice && selOffice.officeId === o.officeId;
     return `
-      <div class="o-item ${selOffice&&selOffice.officeId===o.officeId?'sel':''}" onclick="pickOffice('${o.officeId}')">
-        <div class="o-ico ${tc}">${o.type||'?'}</div>
-        <div class="o-info">
-          <div class="o-name">${o.name}</div>
-          <div class="o-meta">
-            <span class="type-badge tb-${tc}">${o.type}</span>
-            <span>SOL: ${o.solId}</span>
-            ${o.soName ? `<span style="color:var(--muted2)">↑ ${o.soName}</span>` : ''}
-          </div>
-          ${subs.length ? `<div class="o-sub-count">+${subs.length} subordinate${subs.length>1?'s':''} will be included</div>` : ''}
-        </div>
-        <div class="o-chk">✓</div>
+      <div class="g-card ${tc} ${isSel ? 'sel' : ''}" onclick="pickOffice('${o.officeId}')"
+           style="animation-delay:${i * 0.03}s">
+        <div class="g-chk">✓</div>
+        <div class="g-ico ${tc}">${o.type}</div>
+        <div class="g-name">${o.name}</div>
+        <div class="g-sol">SOL: ${o.solId}</div>
+        ${subs.length ? `<div class="g-sub-badge">+${subs.length} sub${subs.length > 1 ? 's' : ''}</div>` : ''}
       </div>`;
   }).join('');
 }
@@ -936,6 +960,13 @@ function pickOffice(id) {
   selOffice = ALL_OFFICES.find(o => o.officeId === id);
   const q = document.getElementById('office-search').value;
   filterOffices(q);
+  // Update selected banner
+  const subs = getSubordinates(selOffice.name);
+  const banner = document.getElementById('sel-banner');
+  banner.className = 'sel-banner show' + (selOffice.type === 'HPO' ? ' hpo-sel' : '');
+  document.getElementById('sel-banner-name').textContent = selOffice.name;
+  document.getElementById('sel-banner-meta').textContent =
+    `${selOffice.type} · SOL: ${selOffice.solId}${subs.length ? ' · +' + subs.length + ' subordinate' + (subs.length > 1 ? 's' : '') + ' will be included' : ''}`;
   document.getElementById('btn-s1').disabled = false;
 }
 
@@ -1116,6 +1147,7 @@ function resetAll() {
   selOffice=null; entryData={};
   document.getElementById('office-search').value='';
   document.getElementById('btn-s1').disabled=true;
+  document.getElementById('sel-banner').className='sel-banner';  // hide banner
   setToday(); document.getElementById('today-tag').textContent='✅ Set to today';
   document.getElementById('today-tag').style.cssText='';
   filterOffices('');   // only HPO + SPO
