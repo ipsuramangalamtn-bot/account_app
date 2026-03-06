@@ -530,7 +530,7 @@ tbody tr:last-child td{border-bottom:none}tbody tr:hover td{background:var(--bg)
         <div class="field"><label>Username</label><input class="inp" id="admin-user" type="text" placeholder="admin" autocomplete="off"></div>
         <div class="field"><label>Password</label><input class="inp" id="admin-pass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
         <button class="btn btn-p btn-full" onclick="doLogin()" style="margin-top:4px">Login →</button>
-       <!-- ═══  <p style="font-size:.7rem;color:var(--muted);text-align:center;margin-top:11px">Default: <code>admin</code> / <code>admin123</code></p>═══ -->
+        <!-- ═══ <p style="font-size:.7rem;color:var(--muted);text-align:center;margin-top:11px">Default: <code>admin</code> / <code>admin123</code></p>-->
       </div>
     </div>
   </div>
@@ -1310,12 +1310,14 @@ async function loadDash() {
     `<span style="color:#7dd3fc">${todayTotal.toLocaleString()}</span><span style="font-size:.85rem;opacity:.5;margin:0 3px">/</span>${grand.toLocaleString()}`;
   document.getElementById('st-total-lbl').textContent = 'Accounts (Today / All Time)';
 
-  document.getElementById('st-sub').textContent  = subIds.size;
-  document.getElementById('st-pend').textContent = Math.max(0, submittable.length - subIds.size);
+  // Boxes 2 & 3 — TODAY only
+  const todaySubIds = new Set(todaySubs.map(s => s.officeId));
+  document.getElementById('st-sub').textContent  = todaySubIds.size;
+  document.getElementById('st-pend').textContent = Math.max(0, submittable.length - todaySubIds.size);
   document.getElementById('st-today').textContent = todaySubs.length;
   document.getElementById('dash-date').textContent = fmtShort(today);
 
-  // By account type chart
+  // By account type chart (all time)
   const tt={}; ACCOUNT_TYPES.forEach(t=>tt[t.id]=0);
   subs.forEach(s=>Object.values(s.data).forEach(od=>Object.entries(od).forEach(([tid,v])=>{if(tt[tid]!==undefined)tt[tid]+=v;})));
   const maxT = Math.max(...Object.values(tt),1);
@@ -1326,48 +1328,45 @@ async function loadDash() {
       <div class="b-num">${tt[t.id]}</div>
     </div>`).join('');
 
-  // Submission status — counts + scrollable office lists
-  const s = subIds.size, p = Math.max(0, submittable.length - s);
-  const pct = submittable.length ? Math.round(s/submittable.length*100) : 0;
-  const submittedList = submittable.filter(o => subIds.has(o.officeId));
-  const pendingList   = submittable.filter(o => !subIds.has(o.officeId));
+  // Submission status — TODAY only, names only (no counts)
+  const todayPct = submittable.length ? Math.round(todaySubIds.size / submittable.length * 100) : 0;
+  const submittedToday = submittable.filter(o => todaySubIds.has(o.officeId));
+  const pendingToday   = submittable.filter(o => !todaySubIds.has(o.officeId));
 
   document.getElementById('status-chart').innerHTML=`
-    <div style="margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:4px">
-        <span style="color:var(--muted)">Completion</span><strong>${pct}%</strong>
-      </div>
-      <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:var(--green)"></div></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;font-size:.75rem;color:var(--muted);margin-bottom:6px">
+      <span>Today's completion</span><strong style="color:var(--ink)">${todayPct}%</strong>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px">
+    <div class="prog-bar" style="margin-bottom:12px"><div class="prog-fill" style="width:${todayPct}%;background:var(--green)"></div></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
       <div>
-        <div style="background:var(--gsoft);border-radius:9px;padding:9px 11px;text-align:center;margin-bottom:7px">
-          <div style="font-family:'DM Serif Display',serif;font-size:1.4rem;color:var(--green)">${s}</div>
-          <div style="font-size:.68rem;color:var(--muted);margin-top:1px;font-weight:600">Submitted</div>
+        <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--gsoft);border-radius:8px;margin-bottom:6px">
+          <span style="width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0"></span>
+          <span style="font-size:.72rem;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.05em">Submitted</span>
+          <span style="font-size:.72rem;color:var(--muted);margin-left:auto">${submittedToday.length}</span>
         </div>
-        <div style="max-height:140px;overflow-y:auto;display:flex;flex-direction:column;gap:4px">
-          ${submittedList.length ? submittedList.map(o=>`
-            <div style="display:flex;align-items:center;gap:5px;background:var(--gsoft);border-radius:6px;padding:4px 8px;font-size:.71rem">
-              <span style="width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0"></span>
+        <div style="max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:3px">
+          ${submittedToday.length ? submittedToday.map(o=>`
+            <div style="display:flex;align-items:center;gap:5px;padding:5px 8px;border-radius:6px;background:var(--gsoft);font-size:.72rem">
+              <span style="width:5px;height:5px;border-radius:50%;background:var(--green);flex-shrink:0"></span>
               <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500">${o.name}</span>
-              <span style="color:var(--muted);flex-shrink:0">${o.type}</span>
             </div>`).join('')
-          : '<div style="font-size:.72rem;color:var(--muted);text-align:center;padding:8px">None yet</div>'}
+          : '<div style="font-size:.71rem;color:var(--muted);text-align:center;padding:10px 6px">None yet today</div>'}
         </div>
       </div>
       <div>
-        <div style="background:var(--asoft);border-radius:9px;padding:9px 11px;text-align:center;margin-bottom:7px">
-          <div style="font-family:'DM Serif Display',serif;font-size:1.4rem;color:var(--amber)">${p}</div>
-          <div style="font-size:.68rem;color:var(--muted);margin-top:1px;font-weight:600">Pending</div>
+        <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--asoft);border-radius:8px;margin-bottom:6px">
+          <span style="width:7px;height:7px;border-radius:50%;background:var(--amber);flex-shrink:0"></span>
+          <span style="font-size:.72rem;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.05em">Pending</span>
+          <span style="font-size:.72rem;color:var(--muted);margin-left:auto">${pendingToday.length}</span>
         </div>
-        <div style="max-height:140px;overflow-y:auto;display:flex;flex-direction:column;gap:4px">
-          ${pendingList.length ? pendingList.map(o=>`
-            <div style="display:flex;align-items:center;gap:5px;background:var(--asoft);border-radius:6px;padding:4px 8px;font-size:.71rem">
-              <span style="width:6px;height:6px;border-radius:50%;background:var(--amber);flex-shrink:0"></span>
+        <div style="max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:3px">
+          ${pendingToday.length ? pendingToday.map(o=>`
+            <div style="display:flex;align-items:center;gap:5px;padding:5px 8px;border-radius:6px;background:var(--asoft);font-size:.72rem">
+              <span style="width:5px;height:5px;border-radius:50%;background:var(--amber);flex-shrink:0"></span>
               <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500">${o.name}</span>
-              <span style="color:var(--muted);flex-shrink:0">${o.type}</span>
             </div>`).join('')
-          : '<div style="font-size:.72rem;color:var(--muted);text-align:center;padding:8px">All submitted! ✅</div>'}
+          : '<div style="font-size:.71rem;color:var(--muted);text-align:center;padding:10px 6px">All submitted! ✅</div>'}
         </div>
       </div>
     </div>`;
